@@ -1,0 +1,27 @@
+@CTX:[DOM:PROJECT_LYCEUM|SUB:END_STATE_DEFINITION|GOAL:PROVABLE_LLM_CONTROL_PLANE]
+
+@BIAS:{P:1.0, M:1.0, S:1.0, D:1.0, C:1.0}
+
+@CONCEPT
+[[MCP_NATIVE_HUB]] [[FORMAL_VERIFIED_ROUTING]] [[LEAN4_RAG_KERNEL]] [[NOMOS_GOVERNED_EXECUTION]] [[MULTI_MODAL_CONSISTENCY]] [[STATE_PERSISTENCE_DAEMON]]
+
+@SHIFT
++ [JSON_RPC_2_0_FORMALISM]
++ [VECTOR_SPACE_ABSTRACTION]
++ [CONTEXT_INJECTION_SAFETY]
++ [SYMBOLIC_REASONING_GATE]
+- [UNVERIFIED_PYTHON_RAG]
+- [STOCHASTIC_TOOL_CALLING]
+! [TYPE_SAFE_PROTOCOL_ADAPTATION]
+! [NOMOS_INVARIANT_ENFORCEMENT]
+
+@STATE: ARCHITECTURE_FREEZE (Phase 1)
+- L1 (Interface): MCP Standard (Resources, Tools, Prompts)
+- L2 (Governance): Nomos Framework Logic
+- L3 (Knowledge): Lean 4 Native RAG / Vector Engine
+- L4 (Execution): Verified Multi-modal Bridge
+
+[REASONING]
+Lyceumは単なるツールではなく、AIの確率的な挙動を数理的な秩序（Nomos）の中に閉じ込めるための「コントロール・プレーン」である。すべてのデータフローは型システムによって検証され、ハルシネーションは推論レイヤーではなく、このゲートウェイにおいて物理的に遮断される。
+
+@EOF

@@ -2,6 +2,17 @@ name = "lyceum"
 version = "0.1.0"
 defaultTargets = ["lyceum"]
 
+[[lean_lib]]
+name = "Lyceum"
+
 [[lean_exe]]
 name = "lyceum"
 root = "Main"
+
+[[lean_exe]]
+name = "test"
+root = "Test"
+
+[[require]]
+name = "nomos"
+path = "../nomos"
