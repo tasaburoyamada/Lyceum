@@ -1,0 +1,7 @@
+name = "lyceum"
+version = "0.1.0"
+defaultTargets = ["lyceum"]
+
+[[lean_exe]]
+name = "lyceum"
+root = "Main"
