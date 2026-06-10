@@ -7,6 +7,6 @@ class LlmBackend (α : Type) where
   listModels (self : α) : IO (Except AppError (List String))
 
 class ExecutionEngine (α : Type) where
-  execute (self : α) (cmd : String) (lang : String) : IO (Except AppError String)
+  prepare (self : α) (cmd : String) (lang : String) : Except AppError ExecutionAction
 
 end Lyceum

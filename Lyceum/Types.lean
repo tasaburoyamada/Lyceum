@@ -129,4 +129,15 @@ structure InitializeResult where
   serverInfo : ServerInfo
 deriving Repr, ToJson, FromJson, BEq, Inhabited
 
+/-- 物理的な実行アクションの記述 -/
+inductive ExecutionAction where
+  | Bash (cmd : String)
+  | Docker (cmd : String)
+  | Wasm (module : String) (func : String)
+  | Grep (pattern : String) (dir : Option String)
+  | Read (path : String)
+  | Write (path : String) (content : String)
+  | Glob (pattern : String) (dir : Option String)
+deriving Repr, BEq, ToJson, FromJson, Inhabited
+
 end Lyceum
