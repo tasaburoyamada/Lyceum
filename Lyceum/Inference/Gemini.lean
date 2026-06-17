@@ -157,88 +157,92 @@ partial def readStream (handle : IO.FS.Handle) (acc : List GeminiPart) : IO (Lis
   else
     readStream handle acc
 
-instance : LlmBackend GeminiClient where
-  listModels self := do
-    let baseUrl := if self.apiUrl.endsWith "/" then self.apiUrl else self.apiUrl ++ "/"
-    let url := s!"{baseUrl}v1beta/models?key={self.apiKey}"
-    let child ← IO.Process.spawn { 
-      cmd := "curl", 
-      args := #[
-        "-s", "-L", "-X", "GET", 
-        "-H", "Content-Type: application/json", 
-        "-H", s!"x-goog-api-key: {self.apiKey}",
-        url
-      ], 
-      stdout := .piped, stderr := .piped 
-    }
-    let out ← child.stdout.readToEnd
-    let _ ← child.wait
-    match Json.parse out with
-    | .ok json =>
-        if let .ok errObj := json.getObjVal? "error" then
-          let msg := match errObj.getObjVal? "message" with
-            | .ok (.str s) => s
-            | _ => "Unknown API error"
-          return Except.error (AppError.LlmError s!"Gemini API Error (listModels): {msg}")
+def GeminiClient.listModels (self : GeminiClient) : IO (Except AppError (List String)) := do
+  let baseUrl := if self.apiUrl.endsWith "/" then self.apiUrl else self.apiUrl ++ "/"
+  let url := s!"{baseUrl}v1beta/models?key={self.apiKey}"
+  let child ← IO.Process.spawn { 
+    cmd := "curl", 
+    args := #[
+      "-s", "-L", "-X", "GET", 
+      "-H", "Content-Type: application/json", 
+      "-H", s!"x-goog-api-key: {self.apiKey}",
+      url
+    ], 
+    stdout := .piped, stderr := .piped 
+  }
+  let out ← child.stdout.readToEnd
+  let _ ← child.wait
+  match Json.parse out with
+  | .ok json =>
+      if let .ok errObj := json.getObjVal? "error" then
+        let msg := match errObj.getObjVal? "message" with
+          | .ok (.str s) => s
+          | _ => "Unknown API error"
+        return Except.error (AppError.LlmError s!"Gemini API Error (listModels): {msg}")
 
-        let parseModels : Except String (List String) := do
-          let modelsArr ← json.getObjVal? "models"
-          let arr ← modelsArr.getArr?
-          return arr.toList.filterMap (fun j => match j.getObjVal? "name" with | .ok (.str s) => some s | _ => none)
-        match parseModels with 
-        | .ok names => return Except.ok names 
-        | .error e => return Except.error (AppError.LlmError s!"Failed to parse models: {e}. Response: {out}")
-    | .error e => return Except.error (AppError.LlmError s!"JSON parse failed: {e}. Response: {out}")
+      let parseModels : Except String (List String) := do
+        let modelsArr ← json.getObjVal? "models"
+        let arr ← modelsArr.getArr?
+        return arr.toList.filterMap (fun j => match j.getObjVal? "name" with | .ok (.str s) => some s | _ => none)
+      match parseModels with 
+      | .ok names => return Except.ok names 
+      | .error e => return Except.error (AppError.LlmError s!"Failed to parse models: {e}. Response: {out}")
+  | .error e => return Except.error (AppError.LlmError s!"JSON parse failed: {e}. Response: {out}")
 
-  streamChatCompletion self history options := do
-    let (system, contents) ← messagesToGemini history
-    let reqObj : GeminiRequest := { 
-      contents := contents, 
-      system_instruction := system, 
-      generationConfig := optionsToGemini options,
-      tools := none
-    }
-    let jsonReq := (toJson reqObj).compress
-    let model ← match self.modelName with
-      | some m => pure m
-      | none => return Except.error (AppError.ConfigError "No model name specified for Gemini client")
-    
-    let baseUrl := if self.apiUrl.endsWith "/" then self.apiUrl else self.apiUrl ++ "/"
-    let url := s!"{baseUrl}v1beta/{model}:streamGenerateContent?alt=sse&key={self.apiKey}"
-    
-    let child ← IO.Process.spawn { 
-      cmd := "curl", 
-      args := #[
-        "-N", "-s", "-L", "-X", "POST", 
-        "-H", "Content-Type: application/json", 
-        "-H", s!"x-goog-api-key: {self.apiKey}",
-        "-d", jsonReq, 
-        url
-      ], 
-      stdout := .piped, stderr := .piped 
-    }
-    
-    let parts ← readStream child.stdout []
-    IO.println ""
-    
-    let _ ← child.wait
-    
-    let mut messageParts : List MessagePart := []
-    for p in parts do
-      if let some mp ← geminiPartToMessage (toJson p) then
-        messageParts := mp :: messageParts
-    
-    if messageParts.isEmpty then
-      return Except.error (AppError.LlmError "LLM returned empty response")
-    
-    return Except.ok [{ role := Role.assistant, parts := messageParts.reverse }]
+def GeminiClient.streamChatCompletion (self : GeminiClient) (history : List Message) (options : Option LlmRequestOptions) : IO (Except AppError (List Message)) := do
+  let (system, contents) ← messagesToGemini history
+  let reqObj : GeminiRequest := { 
+    contents := contents, 
+    system_instruction := system, 
+    generationConfig := optionsToGemini options,
+    tools := none
+  }
+  let jsonReq := (toJson reqObj).compress
+  let model ← match self.modelName with
+    | some m => pure m
+    | none => return Except.error (AppError.ConfigError "No model name specified for Gemini client")
+  
+  let baseUrl := if self.apiUrl.endsWith "/" then self.apiUrl else self.apiUrl ++ "/"
+  let url := s!"{baseUrl}v1beta/{model}:streamGenerateContent?alt=sse&key={self.apiKey}"
+  
+  let child ← IO.Process.spawn { 
+    cmd := "curl", 
+    args := #[
+      "-N", "-s", "-L", "-X", "POST", 
+      "-H", "Content-Type: application/json", 
+      "-H", s!"x-goog-api-key: {self.apiKey}",
+      "-d", jsonReq, 
+      url
+    ], 
+    stdout := .piped, stderr := .piped 
+  }
+  
+  let parts ← readStream child.stdout []
+  IO.println ""
+  
+  let _ ← child.wait
+  
+  let mut messageParts : List MessagePart := []
+  for p in parts do
+    if let some mp ← geminiPartToMessage (toJson p) then
+      messageParts := mp :: messageParts
+  
+  if messageParts.isEmpty then
+    return Except.error (AppError.LlmError "LLM returned empty response")
+  
+  return Except.ok [{ role := Role.assistant, parts := messageParts.reverse }]
 
-  streamContext self ctx start len := do
-    match ctx.fetchSegment start len with
-    | .error e => return Except.error (AppError.LlmError e)
-    | .ok bytes =>
-        let content := String.fromUTF8! bytes
-        let history : List Message := [{ role := .user, parts := [.text content] }]
-        LlmBackend.streamChatCompletion self history none
+def GeminiClient.streamContext (self : GeminiClient) (ctx : MemoryMappedContext) (start : Nat) (len : Nat) : IO (Except AppError (List Message)) := do
+  match ctx.fetchSegment start len with
+  | .error e => return Except.error (AppError.LlmError e)
+  | .ok bytes =>
+      let content := String.fromUTF8! bytes
+      let history : List Message := [{ role := .user, parts := [.text content] }]
+      self.streamChatCompletion history none
+
+instance : Lyceum.LlmBackend Lyceum.GeminiClient where
+  listModels := GeminiClient.listModels
+  streamChatCompletion := GeminiClient.streamChatCompletion
+  streamContext := GeminiClient.streamContext
 
 end Lyceum
