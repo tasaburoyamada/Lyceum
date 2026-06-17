@@ -5,7 +5,11 @@ import Lean.Data.Json.Parser
 open Lyceum
 open Lean
 
-def main : IO Unit := do
+def main (args : List String) : IO Unit := do
+  if args.contains "--help" || args.contains "-h" then
+    IO.println "Lyceum v0.43.0\nUsage: lyceum [--help]"
+    return
+  
   let apiKey ← IO.getEnv "GEMINI_API_KEY"
   let modelName := "gemini-2.0-flash-exp"
   
