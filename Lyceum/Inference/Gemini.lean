@@ -196,7 +196,7 @@ instance : LlmBackend GeminiClient where
       contents := contents, 
       system_instruction := system, 
       generationConfig := optionsToGemini options,
-      tools := none -- MCP では外部から注入されるべき
+      tools := none
     }
     let jsonReq := (toJson reqObj).compress
     let model ← match self.modelName with
@@ -219,7 +219,7 @@ instance : LlmBackend GeminiClient where
     }
     
     let parts ← readStream child.stdout []
-    IO.println "" -- 最後に改行
+    IO.println ""
     
     let _ ← child.wait
     
@@ -232,5 +232,13 @@ instance : LlmBackend GeminiClient where
       return Except.error (AppError.LlmError "LLM returned empty response")
     
     return Except.ok [{ role := Role.assistant, parts := messageParts.reverse }]
+
+  streamContext self ctx start len := do
+    match ctx.fetchSegment start len with
+    | .error e => return Except.error (AppError.LlmError e)
+    | .ok bytes =>
+        let content := String.fromUTF8! bytes
+        let history : List Message := [{ role := .user, parts := [.text content] }]
+        LlmBackend.streamChatCompletion self history none
 
 end Lyceum
