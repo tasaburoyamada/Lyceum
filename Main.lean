@@ -35,19 +35,19 @@ Usage: lyceum [--help]"
             let (action, nextState) := serverAgent.step state (Input.Request (toJson req))
             state := nextState
             match action with
-            | Action.Respond res => pure <| Except.ok res
-            | Action.CallLlm id history =>
+            | Action.Respond res => pure <| Except.ok (fromJson? res |>.toOption.get!)
+            | Action.CallLlm callId history =>
                 let client : GeminiClient := { apiUrl := "https://generativelanguage.googleapis.com", apiKey := apiKey.getD "", modelName := some modelName }
                 match ← LlmBackend.streamChatCompletion client history none with
-                | .ok respMsgs => pure <| Except.ok { id := id, result := some (toJson respMsgs), jsonrpc := "2.0" }
-                | .error err => pure <| Except.ok { id := id, error := some (AppError.toMcpJson err), jsonrpc := "2.0" }
-            | _ => pure <| Except.ok { id := id, result := some Json.null, jsonrpc := "2.0" }
+                | .ok respMsgs => pure <| Except.ok ({ id := callId, result := some (toJson respMsgs), jsonrpc := "2.0" } : JsonRpc.Response)
+                | .error err => pure <| Except.ok ({ id := callId, error := some (AppError.toMcpJson err), jsonrpc := "2.0" } : JsonRpc.Response)
+            | _ => pure <| Except.ok ({ id := req.id, result := some Json.null, jsonrpc := "2.0" } : JsonRpc.Response)
         | .error _ => 
             match (fromJson? json : Except String JsonRpc.Notification) with
             | .ok notif => 
                 let (_, nextState) := serverAgent.step state (Input.Notification (toJson notif))
                 state := nextState
-                pure <| Except.ok { id := Json.null, result := some Json.null, jsonrpc := "2.0" }
+                pure <| Except.ok ({ id := Json.null, result := some Json.null, jsonrpc := "2.0" } : JsonRpc.Response)
             | .error _ => pure <| Except.error (AppError.ParseError "Invalid JSON-RPC")
 
     match res with

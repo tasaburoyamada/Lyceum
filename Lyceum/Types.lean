@@ -23,6 +23,17 @@ inductive Role where
   | system | user | assistant | tool
 deriving Repr, BEq, ToJson, FromJson, Inhabited
 
+/-- 実行エンジンのアクション定義 -/
+inductive ExecutionAction where
+  | Bash (cmd : String)
+  | Docker (cmd : String)
+  | Wasm (mod : String) (func : String)
+  | Grep (pat : String) (dir : Option String)
+  | Read (path : String)
+  | Write (path : String) (content : String)
+  | Glob (pat : String) (dir : Option String)
+deriving Repr, Inhabited, BEq
+
 instance : ToString Role where
   toString : Role → String
   | .system => "system"
@@ -61,6 +72,9 @@ deriving Repr, ToJson, FromJson, BEq, Inhabited
 
 def Message.mkText (role : Role) (text : String) : Message :=
   { role := role, parts := [.text text] }
+
+def Message.content (msg : Message) : String :=
+  msg.parts.map (fun p => match p with | .text t => t | _ => "") |>.foldl (· ++ ·) ""
 
 /-- 推論オプション -/
 structure LlmRequestOptions where

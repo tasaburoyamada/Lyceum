@@ -84,13 +84,10 @@ def decodeQ40Native (bytes : @& ByteArray) (count : UInt64) : FloatArray := Id.r
 
 @[extern "lean_dot_product_q8_0_native"]
 def dotProductQ80Native (a b : @& ByteArray) : Float := Id.run do
-  let fa1 := a.data.map (fun x => x.toNat.toFloat)
-  let fa2 := b.data.map (fun x => x.toNat.toFloat)
-  
   let mut sum := 0.0
-  let size := min fa1.size fa2.size
+  let size := min a.size b.size
   for i in [0:size] do
-    sum := sum + (fa1.get! i * fa2.get! i)
+    sum := sum + (a.get! i).toNat.toFloat * (b.get! i).toNat.toFloat
   return sum
 
 @[extern "lean_matmul_native"]
