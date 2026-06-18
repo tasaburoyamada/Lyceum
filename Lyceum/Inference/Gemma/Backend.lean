@@ -41,9 +41,10 @@ instance : Repr LocalLeanTensorLlm where
 
 /-- 履歴からプロンプトを生成 -/
 def historyToPrompt (_template : ChatTemplate) (history : List Message) : String :=
-  history.map (fun msg => s!"{msg.content}
-") 
-    |>.foldl (· ++ ·) ""
+  history.map (fun msg => 
+    let partsText := msg.parts.map (fun p => match p with | .text t => t | _ => "") |>.foldl (· ++ ·) ""
+    s!"{partsText}\n"
+  ) |>.foldl (· ++ ·) ""
 
 instance [TerminalEnv IO] : LlmBackend LocalLeanTensorLlm where
   listModels _ := pure (Except.ok ["local-leantensor-gemma-4b"])
@@ -52,7 +53,10 @@ instance [TerminalEnv IO] : LlmBackend LocalLeanTensorLlm where
     let prompt := historyToPrompt self.template history
 
     -- 1. 物理モデルのロード
-    let modelRaw ← match ← loadRawGemmaModel self.modelPath with -- terminalEnv is now implicit
+    let modelRaw ← match self.gemmaModel with
+      | some m => pure m
+      | none => 
+          match ← loadRawGemmaModel self.modelPath with
           | .ok m => pure m
           | .error e => return .error e
 

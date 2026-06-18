@@ -1,9 +1,22 @@
 import Lean
-import Lean.Data.ToJson
-import Lean.Data.FromJson
+import Lean.Data.Json
 import Init.Data.ToString.Basic
+import Lyceum.Base64
+
+open Lean
 
 namespace Lyceum
+
+deriving instance Repr for ByteArray
+deriving instance Repr for Lean.Json
+
+instance : ToJson ByteArray where
+  toJson a := Json.str (toBase64 a)
+
+instance : FromJson ByteArray where
+  fromJson? 
+    | Json.str s => Except.ok (fromBase64 s)
+    | _ => Except.error "Expected string for ByteArray"
 
 /-- MCP 役割の定義 -/
 inductive Role where
@@ -48,6 +61,13 @@ deriving Repr, ToJson, FromJson, BEq, Inhabited
 
 def Message.mkText (role : Role) (text : String) : Message :=
   { role := role, parts := [.text text] }
+
+/-- 推論オプション -/
+structure LlmRequestOptions where
+  temperature : Option Float := none
+  maxTokens : Option Nat := none
+  topP : Option Float := none
+deriving Repr, BEq, ToJson, FromJson, Inhabited
 
 inductive AppError where
   | LlmError : String -> AppError

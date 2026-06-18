@@ -2,17 +2,15 @@ import Lyceum.JsonRpc
 import Lyceum.Inference
 import Lyceum.Types
 import Lyceum.Types.ServerTypes
+import Nomos.Laws
 
 namespace Lyceum
 
 open Lean
+open Nomos
 
 /-- Lyceum サーバーのエージェント定義 -/
-structure ServerAgent where
-  initialState : ServerState
-  step : ServerState -> Input -> Action × ServerState
-
-def serverAgent : ServerAgent where
+def serverAgent : Agent ServerState Input Action where
   initialState := ServerState.Uninitialized
   step s i := 
     match s, i with
@@ -31,9 +29,12 @@ def serverAgent : ServerAgent where
           if req.method == "shutdown" then
             (Action.Respond (toJson { id := req.id, result := some Json.null, jsonrpc := "2.0" : JsonRpc.Response }), ServerState.Shutdown)
           else if req.method == "tools/call" then
-            match (fromJson? req.params : Except String Message) with
-            | .ok msg => (Action.CallLlm req.id [msg], ServerState.Initialized config)
-            | .error _ => (Action.Respond (toJson { id := req.id, error := some (Json.str "Invalid parameters for tool call"), jsonrpc := "2.0" : JsonRpc.Response }), ServerState.Initialized config)
+            match req.params with
+            | some paramsJson =>
+              match (fromJson? paramsJson : Except String Message) with
+              | .ok msg => (Action.CallLlm req.id [msg], ServerState.Initialized config)
+              | .error _ => (Action.Respond (toJson { id := req.id, error := some (Json.str "Invalid parameters for tool call") : JsonRpc.Response }), ServerState.Initialized config)
+            | none => (Action.Respond (toJson { id := req.id, error := some (Json.str "Missing parameters for tool call") : JsonRpc.Response }), ServerState.Initialized config)
           else
             (Action.Respond (toJson { id := req.id, error := some (Json.str "Method not implemented"), jsonrpc := "2.0" : JsonRpc.Response }), ServerState.Initialized config)
         | .error _ => (Action.Respond (toJson { id := Json.null, error := some (Json.str "Invalid Request"), jsonrpc := "2.0" : JsonRpc.Response }), ServerState.Initialized config)

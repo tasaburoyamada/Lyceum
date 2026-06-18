@@ -8,20 +8,20 @@ open Lean
 structure Request where
   id : Json
   method : String
-  params : Option Json
+  params : Option Json := none
   jsonrpc : String := "2.0"
 deriving Repr, ToJson, FromJson, BEq
 
 structure Response where
   id : Json
-  result : Option Json
-  error : Option Json
+  result : Option Json := none
+  error : Option Json := none
   jsonrpc : String := "2.0"
 deriving Repr, ToJson, FromJson, BEq
 
 structure Notification where
   method : String
-  params : Option Json
+  params : Option Json := none
   jsonrpc : String := "2.0"
 deriving Repr, ToJson, FromJson, BEq
 

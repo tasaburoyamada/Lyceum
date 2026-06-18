@@ -100,7 +100,8 @@ def matmulNative (a b : @& FloatArray) (m k n : UInt64) : FloatArray := Id.run d
   let n_nat := n.toNat
   
   let mut result_array := Array.mkEmpty (m_nat * n_nat)
-  result_array := result_array.map (fun _ => 0.0)
+  for _ in [0:m_nat * n_nat] do
+    result_array := result_array.push 0.0
 
   for i in [0:m_nat] do
     for j in [0:n_nat] do

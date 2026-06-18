@@ -87,7 +87,7 @@ def testStreamChatCompletion [Lyceum.Core.TerminalEnv IO] : IO Unit := do
       s!"Expected 1 message, got {messages.length}"
     assert "streamChatCompletion message is assistant role" (messages[0]!.role == Lyceum.Role.assistant)
       s!"Expected assistant role, got {messages[0]!.role}"
-    let content := messages[0]!.content
+    let content := messages[0]!.parts.map (fun p => match p with | .text t => t | _ => "") |>.foldl (· ++ ·) ""
     assert "streamChatCompletion message contains inference output" (content.contains "[Physical Inference]")
       s!"Expected '[Physical Inference]' in content, got {content}"
   | Except.error e =>

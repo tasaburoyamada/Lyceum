@@ -12,9 +12,9 @@ open Lyceum.Inference.Gemma.Raw
 open Lyceum.Core.Environment
 open Lyceum.Tokenizer
 
-open LeanTensor.Math.Gguf.Parser
-open LeanTensor.Math.Gguf.Reader
-open LeanTensor.Math.Gguf.Types
+open Lib.Gguf
+open Lib.Gguf
+open Lib.Gguf
 
 namespace Lyceum.Inference.Gemma.Loader
 
@@ -25,9 +25,9 @@ def NUM_LAYERS : Nat := 18 -- Gemma 2B default, or configure later
 def parseGgufHeader (buf : ByteArray) (off : Nat) : Option (GgufHeader × Nat) := do
   if buf.size < off + 24 then none
   let magic := String.fromUTF8! (buf.extract off (off + 4))
-  let version := LeanTensor.Math.Gguf.Reader.bytesToUInt32Le (buf.extract (off + 4) (off + 8))
-  let tensorCount := LeanTensor.Math.Gguf.Reader.bytesToUInt64Le (buf.extract (off + 8) (off + 16))
-  let metadataCount := LeanTensor.Math.Gguf.Reader.bytesToUInt64Le (buf.extract (off + 16) (off + 24))
+  let version := Lib.Gguf.bytesToUInt32Le (buf.extract (off + 4) (off + 8))
+  let tensorCount := Lib.Gguf.bytesToUInt64Le (buf.extract (off + 8) (off + 16))
+  let metadataCount := Lib.Gguf.bytesToUInt64Le (buf.extract (off + 16) (off + 24))
   return ({ magic := magic, version := version, tensorCount := tensorCount, metadataCount := metadataCount }, off + 24)
 
 /-- メタデータから語彙を抽出する -/
@@ -47,7 +47,7 @@ def extractVocab (kvs : List (String × MetadataValue)) : Lyceum.Tokenizer.Vocab
 def loadRawTensor (tensorInfos : List GgufTensorInfo) (buf : ByteArray) (name : String) : Except Lyceum.AppError RawTensor :=
   match tensorInfos.find? (fun info => info.name == name) with
   | some info =>
-      let data := LeanTensor.Math.Gguf.Reader.loadGgufTensorData buf info
+      let data := Lib.Gguf.loadGgufTensorData buf info
       .ok { dims := info.dimensions, data := data }
   | none => .error (Lyceum.AppError.ExecutionError s!"Tensor not found: {name}")
 
@@ -55,7 +55,7 @@ def loadRawTensor (tensorInfos : List GgufTensorInfo) (buf : ByteArray) (name : 
 GGUFファイルからGemmaモデルの重みをロードする。
 -/
 def loadRawGemmaModel (path : String) [TerminalEnv IO] : IO (Except Lyceum.AppError RawGemmaModel) := do
-  let (header, _) ← match (← LeanTensor.Math.Gguf.Parser.parseGgufMetadata path) with
+  let (header, _) ← match (← Lib.Gguf.parseGgufMetadata path) with
     | .ok (h, k) => pure (h, k)
     | .error e => return .error (Lyceum.AppError.ExecutionError s!"GGUF Metadata error: {e}")
   
@@ -68,18 +68,18 @@ def loadRawGemmaModel (path : String) [TerminalEnv IO] : IO (Except Lyceum.AppEr
 
   let mut off := next_off
   for _ in [0:header.metadataCount.toNat] do
-    match LeanTensor.Math.Gguf.Reader.readGgufString buf off with
+    match Lib.Gguf.readGgufString buf off with
     | some (_, off1) =>
-        match LeanTensor.Math.Gguf.Reader.readBytes buf off1 4 with
+        match Lib.Gguf.readBytes buf off1 4 with
         | some (typeBytes, off2) =>
-            let type := LeanTensor.Math.Gguf.Reader.bytesToUInt32Le typeBytes
-            match LeanTensor.Math.Gguf.Reader.readMetadataValue buf off2 type with
+            let type := Lib.Gguf.bytesToUInt32Le typeBytes
+            match Lib.Gguf.readMetadataValue buf off2 type with
             | some (_, off3) => off := off3
             | none => break
         | none => break
     | none => break
 
-  let (tensorInfos, _) := LeanTensor.Math.Gguf.Parser.parseGgufTensorInfos buf off header.tensorCount.toNat
+  let (tensorInfos, _) := Lib.Gguf.parseGgufTensorInfos buf off header.tensorCount.toNat
 
   -- 1. Load Token Embedding
   let token_embd ← match loadRawTensor tensorInfos buf "token_embd.weight" with

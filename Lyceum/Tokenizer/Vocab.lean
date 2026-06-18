@@ -32,6 +32,14 @@ def emptyVocab : Vocab := {
   types     := Lean.RBMap.empty
 }
 
+/-- 語彙にトークンを追加 -/
+def Vocab.add (v : Vocab) (id : Nat) (token : String) (score : Float) (type : TokenType) : Vocab := {
+  tokenToId := v.tokenToId.insert token id,
+  idToToken := v.idToToken.insert id token,
+  scores    := v.scores.insert id score,
+  types     := v.types.insert id type
+}
+
 /-- トークン文字列から ID を取得 -/
 def Vocab.getId (v : Vocab) (token : String) : Option Nat :=
   v.tokenToId.find? token
