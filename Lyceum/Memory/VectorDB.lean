@@ -1,0 +1,96 @@
+import Lean
+import Lyceum.Types
+import Lyceum.Inference -- For AppError
+import Lyceum.Inference.Gemma.Embedding -- For Vector
+import Lyceum.Inference.Gemma.Native -- For dotProductNative, normNative
+import Lyceum.Core.Environment -- For TerminalEnv
+
+open Lyceum
+open Lyceum.Core -- New open statement
+open Lean hiding Message
+open Lyceum.Core.Environment -- Open to bring TerminalEnv into scope
+open Lyceum.Inference.Gemma.Embedding -- Open to bring Vector into scope
+open Lyceum.Inference.Gemma.Native -- Open to bring native functions into scope
+
+namespace Lyceum.Memory
+
+--TEMP_MARKER--
+
+deriving instance Repr for Json
+
+/-- 
+ベクトルデータベースのエントリー。
+ベクトルデータに加えて、元のテキストやメタデータを保持する。
+-/
+structure VectorEntry where
+  id : String
+  text : String
+  vector : Vector
+  metadata : Json := Json.null
+deriving Repr, Inhabited, ToJson, FromJson
+
+/--
+インメモリーのベクトルデータベース。
+-/
+structure VectorDB where
+  entries : Array VectorEntry := #[]
+deriving Repr, Inhabited, ToJson, FromJson
+
+instance : EmptyCollection VectorDB where
+  emptyCollection := { entries := #[] }
+
+/-- 
+コサイン類似度の計算。
+内積 / (ノルム * ノルム)
+-/
+def cosineSimilarity (v1 v2 : Vector) : Float := Id.run do
+  let d1 := v1.data
+  let d2 := v2.data
+  if d1.size != d2.size || d1.size == 0 then return 0.0
+  else
+    let fa1 := FloatArray.mk d1
+    let fa2 := FloatArray.mk d2
+    let dot := dotProductNative fa1 fa2
+    let n1 := normNative fa1
+    let n2 := normNative fa2
+    if n1 == 0.0 || n2 == 0.0 then return 0.0
+    else return dot / (n1 * n2)
+
+/--
+ベクトル検索。
+クエリベクトルに対して、類似度スコアが閾値以上のものを抽出し、
+スコアの降順で上位K件を返す。
+-/
+def VectorDB.search (self : VectorDB) (query : Vector) (topK : Nat) (threshold : Float := 0.5) : Array (VectorEntry × Float) :=
+  let scored := self.entries.filterMap (fun entry =>
+    let score := cosineSimilarity query entry.vector
+    if score >= threshold then some (entry, score) else none
+  )
+  -- Floatの比較用にソート
+  let sorted := scored.qsort (fun a b => a.2 > b.2)
+  sorted.extract 0 topK
+
+/--
+データベースへのエントリー追加。
+-/
+def VectorDB.insert (self : VectorDB) (entry : VectorEntry) : VectorDB :=
+  { self with entries := self.entries.push entry }
+
+/-- 永続化: ファイルへ保存 -/
+def VectorDB.save (self : VectorDB) (path : String) [TerminalEnv IO] : IO Unit := do
+  let json := Lean.toJson self
+  TerminalEnv.writeFile (System.FilePath.mk path) json.pretty
+
+/-- 永続化: ファイルから読込 -/
+def VectorDB.load (path : String) [TerminalEnv IO] : IO (Except String VectorDB) := do
+  if !(← TerminalEnv.pathExists path) then
+    return .ok ∅
+  let content ← TerminalEnv.readFile (System.FilePath.mk path)
+  match Lean.Json.parse content with
+  | .ok json => 
+      match Lean.fromJson? json with
+      | .ok db => return .ok db
+      | .error e => return .error s!"JSON Decode error: {e}"
+  | .error e => return .error s!"JSON Parse error: {e}"
+
+end Lyceum.Memory

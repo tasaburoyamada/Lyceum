@@ -1,4 +1,5 @@
 import Lyceum.Test.ServerTest
+import Lyceum.Test.LocalLlmTest -- New import
 
 def main : IO Unit := do
   IO.println "Running Lyceum Nomos Tests..."
@@ -15,4 +16,12 @@ def main : IO Unit := do
     IO.eprintln "  [FAIL] Invalid Initialization Rejection Trace"
     IO.Process.exit 1
 
-  IO.println "All Nomos tests passed."
+  -- Run Local LLM tests
+  let localLlmTestResult ← Lyceum.Test.runLocalLlmTests
+  if localLlmTestResult != 0 then
+    IO.eprintln "  [FAIL] Local LLM tests failed."
+    IO.Process.exit 1
+  else
+    IO.println "  [PASS] Local LLM tests passed."
+
+  IO.println "All Lyceum tests passed."

@@ -7,7 +7,8 @@ open Lean
 
 def main (args : List String) : IO Unit := do
   if args.contains "--help" || args.contains "-h" then
-    IO.println "Lyceum v0.43.0\nUsage: lyceum [--help]"
+    IO.println "Lyceum v0.43.0
+Usage: lyceum [--help]"
     return
   
   let apiKey ← IO.getEnv "GEMINI_API_KEY"
@@ -21,45 +22,41 @@ def main (args : List String) : IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
 
-  while state != .Shutdown do
+  while state != ServerState.Shutdown do
     let line ← stdin.getLine
     if line.isEmpty then break -- EOF
 
-    match Json.parse line with
-    | .error _ => continue
-    | .ok json =>
-        let input : Option Input := 
-          match (fromJson? json : Except String JsonRpc.Request) with
-          | .ok req => some (.Request req)
-          | .error _ => 
-              match (fromJson? json : Except String JsonRpc.Notification) with
-              | .ok notif => some (.Notification notif)
-              | .error _ => none
-        
-        match input with
-        | none => continue
-        | some i =>
-            let (action, nextState) := serverAgent.step state i
+    let res : Except AppError JsonRpc.Response ← 
+      match Json.parse line with
+      | .error e => pure <| Except.error (AppError.ParseError e)
+      | .ok json =>
+        match (fromJson? json : Except String JsonRpc.Request) with
+        | .ok req => 
+            let (action, nextState) := serverAgent.step state (Input.Request (toJson req))
             state := nextState
-            
             match action with
-            | .Respond res => 
-                stdout.putStrLn (Json.compress (toJson res))
-                stdout.flush
-            | .Notify notif =>
-                stdout.putStrLn (Json.compress (toJson notif))
-                stdout.flush
-            | .CallLlm id history =>
+            | Action.Respond res => pure <| Except.ok res
+            | Action.CallLlm id history =>
                 let client : GeminiClient := { apiUrl := "https://generativelanguage.googleapis.com", apiKey := apiKey.getD "", modelName := some modelName }
                 match ← LlmBackend.streamChatCompletion client history none with
-                | .ok respMsgs =>
-                    let res : JsonRpc.Response := { id := id, result := some (toJson respMsgs) }
-                    stdout.putStrLn (Json.compress (toJson res))
-                    stdout.flush
-                | .error err =>
-                    let res : JsonRpc.Response := { id := id, error := some (Json.str s!"LLM Error: {err}") }
-                    stdout.putStrLn (Json.compress (toJson res))
-                    stdout.flush
-            | .None => pure ()
+                | .ok respMsgs => pure <| Except.ok { id := id, result := some (toJson respMsgs), jsonrpc := "2.0" }
+                | .error err => pure <| Except.ok { id := id, error := some (AppError.toMcpJson err), jsonrpc := "2.0" }
+            | _ => pure <| Except.ok { id := id, result := some Json.null, jsonrpc := "2.0" }
+        | .error _ => 
+            match (fromJson? json : Except String JsonRpc.Notification) with
+            | .ok notif => 
+                let (_, nextState) := serverAgent.step state (Input.Notification (toJson notif))
+                state := nextState
+                pure <| Except.ok { id := Json.null, result := some Json.null, jsonrpc := "2.0" }
+            | .error _ => pure <| Except.error (AppError.ParseError "Invalid JSON-RPC")
+
+    match res with
+    | .ok r => 
+        stdout.putStrLn (Json.compress (toJson r))
+        stdout.flush
+    | .error e =>
+        let errRes : JsonRpc.Response := { id := Json.null, error := some (AppError.toMcpJson e), jsonrpc := "2.0" }
+        stdout.putStrLn (Json.compress (toJson errRes))
+        stdout.flush
 
   IO.println "Lyceum MCP Server shutting down."

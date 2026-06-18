@@ -3,6 +3,13 @@
  "packages":
  [{"type": "path",
    "scope": "",
+   "name": "LeanTensor",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../engine/LeanTensor",
+   "configFile": "lakefile.lean"},
+  {"type": "path",
+   "scope": "",
    "name": "nomos",
    "manifestFile": "lake-manifest.json",
    "inherited": false,

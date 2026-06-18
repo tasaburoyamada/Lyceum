@@ -6,23 +6,23 @@ namespace Lyceum.JsonRpc
 open Lean
 
 structure Request where
-  jsonrpc : String := "2.0"
   id : Json
   method : String
-  params : Json := Json.null
+  params : Option Json
+  jsonrpc : String := "2.0"
 deriving Repr, ToJson, FromJson, BEq
 
 structure Response where
-  jsonrpc : String := "2.0"
   id : Json
-  result : Option Json := none
-  error : Option Json := none
+  result : Option Json
+  error : Option Json
+  jsonrpc : String := "2.0"
 deriving Repr, ToJson, FromJson, BEq
 
 structure Notification where
-  jsonrpc : String := "2.0"
   method : String
-  params : Json := Json.null
+  params : Option Json
+  jsonrpc : String := "2.0"
 deriving Repr, ToJson, FromJson, BEq
 
 end Lyceum.JsonRpc

@@ -4,6 +4,11 @@ defaultTargets = ["lyceum"]
 
 [[lean_lib]]
 name = "Lyceum"
+roots = ["Lyceum"]
+
+[[lean_lib]] # New lib for core modules
+name = "Lyceum.Core"
+roots = ["Lyceum.Core"]
 
 [[lean_exe]]
 name = "lyceum"
@@ -16,3 +21,7 @@ root = "Test"
 [[require]]
 name = "nomos"
 path = "../nomos"
+
+[[require]]
+name = "LeanTensor"
+path = "../../engine/LeanTensor"

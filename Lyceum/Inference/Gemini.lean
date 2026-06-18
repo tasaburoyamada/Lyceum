@@ -157,8 +157,7 @@ partial def readStream (handle : IO.FS.Handle) (acc : List GeminiPart) : IO (Lis
   else
     readStream handle acc
 
-instance : LlmBackend GeminiClient where
-  listModels self := do
+def geminiListModels (self : GeminiClient) : IO (Except AppError (List String)) := do
     let baseUrl := if self.apiUrl.endsWith "/" then self.apiUrl else self.apiUrl ++ "/"
     let url := s!"{baseUrl}v1beta/models?key={self.apiKey}"
     let child ← IO.Process.spawn { 
@@ -190,7 +189,7 @@ instance : LlmBackend GeminiClient where
         | .error e => return Except.error (AppError.LlmError s!"Failed to parse models: {e}. Response: {out}")
     | .error e => return Except.error (AppError.LlmError s!"JSON parse failed: {e}. Response: {out}")
 
-  streamChatCompletion self history options := do
+def geminiStreamChatCompletion (self : GeminiClient) (history : List Message) (options : Option LlmRequestOptions) : IO (Except AppError (List Message)) := do
     let (system, contents) ← messagesToGemini history
     let reqObj : GeminiRequest := { 
       contents := contents, 
@@ -233,12 +232,15 @@ instance : LlmBackend GeminiClient where
     
     return Except.ok [{ role := Role.assistant, parts := messageParts.reverse }]
 
+instance : LlmBackend GeminiClient where
+  listModels := geminiListModels
+  streamChatCompletion := geminiStreamChatCompletion
   streamContext self ctx start len := do
     match ctx.fetchSegment start len with
     | .error e => return Except.error (AppError.LlmError e)
     | .ok bytes =>
         let content := String.fromUTF8! bytes
         let history : List Message := [{ role := .user, parts := [.text content] }]
-        LlmBackend.streamChatCompletion self history none
+        geminiStreamChatCompletion self history none
 
 end Lyceum

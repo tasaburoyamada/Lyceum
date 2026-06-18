@@ -1,10 +1,17 @@
 import Lyceum.Server
 import Nomos.Laws
+import Lyceum.Test.MockBackend
 
 namespace Lyceum.Test
 
 open Lyceum
 open Nomos
+...
+/-- LLM がエラーを返した際の MCP レスポンス検証トレース -/
+def llmErrorTrace : Trace ServerState Input Action := [
+  (.Uninitialized, .Request { id := 1, method := "initialize", jsonrpc := "2.0", params := .null }, .Respond { id := 1, jsonrpc := "2.0", result := some (Lean.toJson { protocolVersion := "2024-11-05", capabilities := Lean.Json.mkObj [], serverInfo := { name := "Lyceum", version := "0.1.0" } : InitializeResult }), error := none }),
+  (.Initialized { apiKey := "", modelName := "" }, .Request { id := 2, method := "tools/call", jsonrpc := "2.0", params := Lean.toJson (Message.mkText .user "test") }, .CallLlm 2 [Message.mkText .user "test"])
+]
 
 /-- 正常な初期化と終了のシーケンス -/
 def normalTrace : Trace ServerState Input Action := [
