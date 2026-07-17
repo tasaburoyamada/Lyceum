@@ -204,14 +204,14 @@ def geminiListModels (self : GeminiClient) : IO (Except AppError (List String)) 
             | _ => "Unknown API error"
           return Except.error (AppError.LlmError s!"Gemini API Error (listModels): {msg}")
 
-        let parseModels : Except String (List String) := do
-          let modelsArr ← json.getObjVal? "models"
-          let arr ← modelsArr.getArr?
-          return arr.toList.filterMap (fun j => match j.getObjVal? "name" with | .ok (.str s) => some s | _ => none)
-        match parseModels with 
-        | .ok names => return Except.ok names 
-        | .error e => return Except.error (AppError.LlmError s!"Failed to parse models: {e}. Response: {out}")
-    | .error e => return Except.error (AppError.LlmError s!"JSON parse failed: {e}. Response: {out}")
+      let parseModels : Except String (List String) := do
+        let modelsArr ← json.getObjVal? "models"
+        let arr ← modelsArr.getArr?
+        return arr.toList.filterMap (fun j => match j.getObjVal? "name" with | .ok (.str s) => some s | _ => none)
+      match parseModels with 
+      | .ok names => return Except.ok names 
+      | .error e => return Except.error (AppError.LlmError s!"Failed to parse models: {e}. Response: {out}")
+  | .error e => return Except.error (AppError.LlmError s!"JSON parse failed: {e}. Response: {out}")
 
 def geminiStreamChatCompletion (self : GeminiClient) (history : List Message) (options : Option LlmRequestOptions) : IO (Except AppError (List Message)) := do
     let (system, contents) ← messagesToGemini history
