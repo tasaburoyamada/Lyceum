@@ -32,6 +32,16 @@ Lyceum が扱う全データの「型」を定義する最も基礎的なモジ�
 -   **`GeminiClient`**: APIのURL、キー、モデル名を保持する構造体。
 -   **`LlmClient`**: `GeminiClient` のエイリアス（`abbrev LlmClient := GeminiClient`）として定義され、Lyceum の標準クライアントとしてエクスポートされます。
 -   **JSON 変換と SSE パース**: `MessagePart` から `GeminiPart` への相互変換ロジックと、Server-Sent Events のチャンクパーサー（`parseSseChunk`）を実装します。
+    -   **最適化**: JSON 経由での冗長な再パースを防ぐため、`GeminiPart` から `MessagePart` へのパターンマッチングによる直接変換（`geminiPartToMessageDirect`）および `curl` プロセスの終了コードに基づく厳密なエラーハンドリングが実装されています。
+
+### 3.4. `Inference/Gemma/Native.lean` (物理演算・量子化デコード)
+ローカル推論およびテンソルデコードを担う低レイヤモジュールです。
+-   **デコーダ**: FP16 物理デコード、およびルックアップテーブル（LUT）方式を用いた高速量子化デコーダ（FP8, FP4, 1bit）を実装しています。
+-   **演算の最適化**: `matmulNative`（行列積）および各デコーダにおいて、`Array.ofFn` を活用して一時的なヒープメモリの `push` や `set!` コピーを完全に排除した $\mathcal{O}(1)$ アロケーション設計を採用しています。
+
+### 3.5. `Memory/VectorDB.lean` (ベクトルデータベース)
+インメモリ型の類似度検索エンジンです。
+-   **アロケーションフリー類似度演算**: `cosineSimilarity` において、`FloatArray` への一時的なメモリ詰め替えを排除し、単一ループ走査で内積とノルムを同時に計算することで計算効率を極大化しています。
 
 ## 4. 横断的関心事とシステム統合の制約
 
