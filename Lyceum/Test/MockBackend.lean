@@ -8,7 +8,7 @@ structure MockLlmBackend where
   shouldFail : Bool
   errorMessage : String
 
-instance : LlmInstanceBackend MockLlmBackend where
+instance : LlmBackend MockLlmBackend where
   streamChatCompletion self _ _ := 
     if self.shouldFail then
       return .error (.LlmError self.errorMessage)

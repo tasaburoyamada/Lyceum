@@ -11,7 +11,4 @@ class LlmBackend (α : Type) where
 class ExecutionEngine (α : Type) where
   prepare (self : α) (cmd : String) (lang : String) : Except AppError ExecutionAction
 
-class ExecutionEngine (α : Type) where
-  prepare (self : α) (cmd : String) (lang : String) : Except AppError ExecutionAction
-
 end Lyceum
