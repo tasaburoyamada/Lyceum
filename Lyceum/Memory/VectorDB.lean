@@ -41,18 +41,25 @@ instance : EmptyCollection VectorDB where
 
 /-- 
 コサイン類似度の計算。
-内積 / (ノルム * ノルム)
+一時的な FloatArray アロケーションを完全に排除し、単一ループ走査で計算量を最適化。
 -/
 def cosineSimilarity (v1 v2 : Vector) : Float := Id.run do
   let d1 := v1.data
   let d2 := v2.data
-  if d1.size != d2.size || d1.size == 0 then return 0.0
+  let size := d1.size
+  if size != d2.size || size == 0 then return 0.0
   else
-    let fa1 := FloatArray.mk d1
-    let fa2 := FloatArray.mk d2
-    let dot := dotProductNative fa1 fa2
-    let n1 := normNative fa1
-    let n2 := normNative fa2
+    let mut dot := 0.0
+    let mut sumSq1 := 0.0
+    let mut sumSq2 := 0.0
+    for i in [0:size] do
+      let x1 := d1[i]!
+      let x2 := d2[i]!
+      dot := dot + x1 * x2
+      sumSq1 := sumSq1 + x1 * x1
+      sumSq2 := sumSq2 + x2 * x2
+    let n1 := Float.sqrt sumSq1
+    let n2 := Float.sqrt sumSq2
     if n1 == 0.0 || n2 == 0.0 then return 0.0
     else return dot / (n1 * n2)
 

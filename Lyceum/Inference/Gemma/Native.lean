@@ -46,6 +46,31 @@ def decodeF32Native (bytes : @& ByteArray) (count : UInt64) : FloatArray := Id.r
     i := i + 1
   return FloatArray.mk result_array
 
+/-- FP16 (Half Precision) を FP32 (Float) にデコードする純粋な Lean 4 実装 -/
+def decodeF16 (w : UInt16) : Float := Id.run do
+  let sign := (w.toNat >>> 15) &&& 1
+  let exp := (w.toNat >>> 10) &&& 0x1F
+  let frac := w.toNat &&& 0x3FF
+  let sign_mul := if sign == 1 then -1.0 else 1.0
+  if exp == 0 then
+    if frac == 0 then
+      return 0.0
+    else
+      -- 非正規化数
+      return sign_mul * 0.00006103515625 * (frac.toFloat / 1024.0)
+  else if exp == 31 then
+    return if frac == 0 then sign_mul * 1e38 else 0.0
+  else
+    -- 正規化数
+    let power : Int := Int.ofNat exp - 15
+    let mut factor := 1.0
+    if power >= 0 then
+      for _ in [0:power.toNat] do factor := factor * 2.0
+    else
+      let neg_power := -power
+      for _ in [0:neg_power.toNat] do factor := factor / 2.0
+    return sign_mul * factor * (1.0 + frac.toFloat / 1024.0)
+
 @[extern "lean_decode_q4_0_native"]
 def decodeQ40Native (bytes : @& ByteArray) (count : UInt64) : FloatArray := Id.run do
   let block_size := 16 -- bytes for qs
@@ -60,8 +85,8 @@ def decodeQ40Native (bytes : @& ByteArray) (count : UInt64) : FloatArray := Id.r
     let d_bits : UInt16 := (bytes.get! (current_byte_idx + 1)).toUInt16 <<< 8 ||| (bytes.get! current_byte_idx).toUInt16
     let m_bits : UInt16 := (bytes.get! (current_byte_idx + 3)).toUInt16 <<< 8 ||| (bytes.get! (current_byte_idx + 2)).toUInt16
     
-    let d : Float := d_bits.toNat.toFloat / 1000.0 -- Dummy conversion
-    let m : Float := m_bits.toNat.toFloat / 1000.0 -- Dummy conversion
+    let d : Float := decodeF16 d_bits
+    let m : Float := decodeF16 m_bits
 
     let q_offset := current_byte_idx + header_size
     for i in [0:block_size] do
@@ -95,23 +120,122 @@ def matmulNative (a b : @& FloatArray) (m k n : UInt64) : FloatArray := Id.run d
   let m_nat := m.toNat
   let k_nat := k.toNat
   let n_nat := n.toNat
-  
-  let mut result_array := Array.mkEmpty (m_nat * n_nat)
-  for _ in [0:m_nat * n_nat] do
-    result_array := result_array.push 0.0
-
-  for i in [0:m_nat] do
-    for j in [0:n_nat] do
-      let mut sum := 0.0
-      for p in [0:k_nat] do
-        let a_val := a.get! (i * k_nat + p)
-        let b_val := b.get! (p * n_nat + j)
-        sum := sum + (a_val * b_val)
-      result_array := result_array.set! (i * n_nat + j) sum
-  return FloatArray.mk result_array
+  let res := Array.ofFn (n := m_nat * n_nat) (fun idx => Id.run do
+    let i := idx.val / n_nat
+    let j := idx.val % n_nat
+    let mut sum := 0.0
+    for p in [0:k_nat] do
+      let a_val := a.get! (i * k_nat + p)
+      let b_val := b.get! (p * n_nat + j)
+      sum := sum + (a_val * b_val)
+    return sum
+  )
+  return FloatArray.mk res
 
 @[extern "lean_cpu_has_avx512"]
 def hasAvx512 (_ : Unit) : Bool := false
+
+initialize fp8E4M3Table : Array Float ← show BaseIO (Array Float) from do
+  let mut arr := Array.mkEmpty 256
+  for i in [0:256] do
+    let sign := (i >>> 7) &&& 1
+    let exp := (i >>> 3) &&& 0xF
+    let frac := i &&& 7
+    let sign_mul := if sign == 1 then -1.0 else 1.0
+    if exp == 0 then
+      if frac == 0 then
+        arr := arr.push 0.0
+      else
+        arr := arr.push (sign_mul * 0.015625 * (frac.toFloat / 8.0))
+    else if exp == 15 && frac == 7 then
+      arr := arr.push 0.0
+    else
+      let power : Int := Int.ofNat exp - 7
+      let mut factor := 1.0
+      if power >= 0 then
+        for _ in [0:power.toNat] do factor := factor * 2.0
+      else
+        let neg_power := -power
+        for _ in [0:neg_power.toNat] do factor := factor / 2.0
+      arr := arr.push (sign_mul * factor * (1.0 + frac.toFloat / 8.0))
+  return arr
+
+initialize fp4E2M1Table : Array Float ← show BaseIO (Array Float) from do
+  let mut arr := Array.mkEmpty 16
+  for i in [0:16] do
+    let sign := (i >>> 3) &&& 1
+    let exp := (i >>> 1) &&& 3
+    let frac := i &&& 1
+    let sign_mul := if sign == 1 then -1.0 else 1.0
+    if exp == 0 then
+      if frac == 0 then
+        arr := arr.push 0.0
+      else
+        arr := arr.push (sign_mul * 0.5)
+    else
+      let power : Int := Int.ofNat exp - 1
+      let mut factor := 1.0
+      if power >= 0 then
+        for _ in [0:power.toNat] do factor := factor * 2.0
+      else
+        let neg_power := -power
+        for _ in [0:neg_power.toNat] do factor := factor / 2.0
+      arr := arr.push (sign_mul * factor * (1.0 + frac.toFloat / 2.0))
+  return arr
+
+initialize oneBitTable : Array (Array Float) ← show BaseIO (Array (Array Float)) from do
+  let mut table := Array.mkEmpty 256
+  for i in [0:256] do
+    let mut decoded := Array.mkEmpty 8
+    for bit in [0:8] do
+      let v := (i >>> bit) &&& 1
+      let f := if v == 1 then 1.0 else -1.0
+      decoded := decoded.push f
+    table := table.push decoded
+  return table
+
+def decodeFp8Native (bytes : @& ByteArray) (count : UInt64) : FloatArray := Id.run do
+  let c := count.toNat
+  let res := Array.ofFn (n := c) (fun idx =>
+    let i := idx.val
+    if i < bytes.size then
+      let b := bytes.get! i
+      fp8E4M3Table[b.toNat]!
+    else
+      0.0
+  )
+  return FloatArray.mk res
+
+def decodeFp4Native (bytes : @& ByteArray) (count : UInt64) : FloatArray := Id.run do
+  let c := count.toNat
+  let res := Array.ofFn (n := c) (fun idx =>
+    let i := idx.val
+    let byte_idx := i / 2
+    if byte_idx < bytes.size then
+      let b := (bytes.get! byte_idx).toNat
+      if i % 2 == 0 then
+        fp4E2M1Table[b &&& 0xF]!
+      else
+        fp4E2M1Table[(b >>> 4) &&& 0xF]!
+    else
+      0.0
+  )
+  return FloatArray.mk res
+
+def decode1bitNative (bytes : @& ByteArray) (count : UInt64) : FloatArray := Id.run do
+  let c := count.toNat
+  let res := Array.ofFn (n := c) (fun idx =>
+    let i := idx.val
+    let byte_idx := i / 8
+    let bit_idx := i % 8
+    if byte_idx < bytes.size then
+      let b := (bytes.get! byte_idx).toNat
+      let decoded_bits := oneBitTable[b]!
+      decoded_bits[bit_idx]!
+    else
+      0.0
+  )
+  return FloatArray.mk res
 
 /-- 
 物理エンジンを用いた推論シミュレーション。

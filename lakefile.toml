@@ -24,4 +24,4 @@ path = "../nomos"
 
 [[require]]
 name = "LeanTensor"
-path = "../../engine/LeanTensor"
+path = "../kaihatsu/engine/LeanTensor"

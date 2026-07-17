@@ -6,7 +6,7 @@
    "name": "LeanTensor",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../engine/LeanTensor",
+   "dir": "../kaihatsu/engine/LeanTensor",
    "configFile": "lakefile.lean"},
   {"type": "path",
    "scope": "",

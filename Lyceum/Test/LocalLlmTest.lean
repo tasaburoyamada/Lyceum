@@ -2,6 +2,7 @@ import Lyceum.Inference
 import Lyceum.Inference.Gemma.Backend
 import Lyceum.Inference.Gemma.Loader
 import Lyceum.Inference.Gemma.Raw
+import Lyceum.Inference.Gemma.Native
 import Lyceum.Types
 import Lyceum.Tokenizer.Vocab
 import Lyceum.Tokenizer.Unigram
@@ -93,10 +94,33 @@ def testStreamChatCompletion [Lyceum.Core.TerminalEnv IO] : IO Unit := do
   | Except.error e =>
     throw (IO.userError s!"[FAIL] streamChatCompletion failed: {e}")
 
+def testQuantizedDecoders : IO Unit := do
+  IO.println "[Test] Quantized Decoders (FP8, FP4, 1bit)"
+  
+  let bytesFp8 : ByteArray := { data := #[0x3C] }
+  let decodedFp8 : FloatArray := Lyceum.Inference.Gemma.Native.decodeFp8Native bytesFp8 1
+  assert "FP8 decode output size is 1" (decodedFp8.size == 1)
+  assert "FP8 decoded value matches expected 1.5" (decodedFp8.get! 0 == 1.5)
+
+  let bytesFp4 : ByteArray := { data := #[0x35] }
+  let decodedFp4 : FloatArray := Lyceum.Inference.Gemma.Native.decodeFp4Native bytesFp4 2
+  assert "FP4 decode output size is 2" (decodedFp4.size == 2)
+  assert "FP4 low bits decoded value matches expected 3.0" (decodedFp4.get! 0 == 3.0)
+  assert "FP4 high bits decoded value matches expected 1.5" (decodedFp4.get! 1 == 1.5)
+
+  let bytes1bit : ByteArray := { data := #[0x05] }
+  let decoded1bit : FloatArray := Lyceum.Inference.Gemma.Native.decode1bitNative bytes1bit 8
+  assert "1bit decode output size is 8" (decoded1bit.size == 8)
+  assert "1bit index 0 is 1.0" (decoded1bit.get! 0 == 1.0)
+  assert "1bit index 1 is -1.0" (decoded1bit.get! 1 == -1.0)
+  assert "1bit index 2 is 1.0" (decoded1bit.get! 2 == 1.0)
+  assert "1bit index 3 is -1.0" (decoded1bit.get! 3 == -1.0)
+
 def runLocalLlmTests [Lyceum.Core.TerminalEnv IO] : IO UInt32 := do
   try
     testListModels
     testStreamChatCompletion
+    testQuantizedDecoders
     return 0
   catch e =>
     IO.println s!"[CRITICAL] Local LLM Test failed: {e}"

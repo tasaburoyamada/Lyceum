@@ -80,6 +80,22 @@ def messagesToGemini (history : List Message) : IO (Option GeminiContent × List
       contents := content :: contents
   return (system, contents.reverse)
 
+/-- GeminiPart から MessagePart への直接変換（JSONパース不要） -/
+def geminiPartToMessageDirect (p : GeminiPart) : MessagePart :=
+  match p with
+  | .text t => .text t
+  | .inlineData mime b64 =>
+      let bytes := fromBase64 b64
+      match mime.splitOn "/" |>.head! with
+      | "image" => MessagePart.image mime bytes
+      | "audio" => MessagePart.audio mime bytes
+      | "video" => MessagePart.video mime bytes
+      | _ => MessagePart.file mime bytes
+  | .functionCall name args =>
+      .toolCall { id := name, function := { name := name, arguments := args.compress } }
+  | .functionResponse name response =>
+      .toolResponse name response.compress
+
 def geminiPartToMessage (p : Json) : IO (Option MessagePart) := do
   if let .ok (.str t) := p.getObjVal? "text" then
     return some (.text t)
@@ -122,38 +138,43 @@ def optionsToGemini (options : Option LlmRequestOptions) : Option Json := Id.run
 /-- 
 SSE チャンク ("data: {...}") をパースして GeminiPart を抽出する。
 -/
-def parseSseChunk (line : String) : Option GeminiPart := Id.run do
-  if !line.startsWith "data: " then return none
+def parseSseChunk (line : String) : List GeminiPart := Id.run do
+  if !line.startsWith "data: " then return []
   let data := line.drop 6 |>.trimAscii.toString
   match Json.parse data with
   | .ok j =>
-      let navigate : Except String Json := do
+      let navigate : Except String (List Json) := do
         let candidates ← j.getObjVal? "candidates"
         let first ← candidates.getArrVal? 0
         let content ← first.getObjVal? "content"
         let parts ← content.getObjVal? "parts"
-        let firstPart ← parts.getArrVal? 0
-        return firstPart
+        let arr ← parts.getArr?
+        return arr.toList
       match navigate with
-      | .ok p => 
-          if let .ok (.str t) := p.getObjVal? "text" then return some (.text t)
-          if let .ok callObj := p.getObjVal? "function_call" then
-            if let (.ok (.str name), .ok args) := (callObj.getObjVal? "name", callObj.getObjVal? "args") then
-              return some (.functionCall name args)
-          return none
-      | .error _ => none
-  | .error _ => none
+      | .ok ps => 
+          ps.filterMap (fun p =>
+            if let .ok (.str t) := p.getObjVal? "text" then some (.text t)
+            else if let .ok callObj := p.getObjVal? "function_call" then
+              if let (.ok (.str name), .ok args) := (callObj.getObjVal? "name", callObj.getObjVal? "args") then
+                some (.functionCall name args)
+              else none
+            else none
+          )
+      | .error _ => []
+  | .error _ => []
 
 /-- ストリームを読み込みながらリアルタイムで出力するためのヘルパー -/
 partial def readStream (handle : IO.FS.Handle) (acc : List GeminiPart) : IO (List GeminiPart) := do
   let line ← handle.getLine
   if line.isEmpty then return acc
-  if let some part := parseSseChunk line then
-    match part with
-    | .text t => IO.print t; (← IO.getStdout).flush
-    | .functionCall name _ => IO.println s!"\n[Tool Call]: {name}"
-    | _ => pure ()
-    readStream handle (acc ++ [part])
+  let newParts := parseSseChunk line
+  if !newParts.isEmpty then
+    for part in newParts do
+      match part with
+      | .text t => IO.print t; (← IO.getStdout).flush
+      | .functionCall name _ => IO.println s!"\n[Tool Call]: {name}"
+      | _ => pure ()
+    readStream handle (acc ++ newParts)
   else
     readStream handle acc
 
@@ -163,15 +184,18 @@ def geminiListModels (self : GeminiClient) : IO (Except AppError (List String)) 
     let child ← IO.Process.spawn { 
       cmd := "curl", 
       args := #[
+        "--max-time", "5",
         "-s", "-L", "-X", "GET", 
         "-H", "Content-Type: application/json", 
         "-H", s!"x-goog-api-key: {self.apiKey}",
         url
       ], 
-      stdout := .piped, stderr := .piped 
+      stdout := .piped, stderr := .null 
     }
     let out ← child.stdout.readToEnd
-    let _ ← child.wait
+    let exitCode ← child.wait
+    if exitCode != 0 then
+      return Except.error (AppError.NetworkError s!"curl process exited with code {exitCode}")
     match Json.parse out with
     | .ok json =>
         if let .ok errObj := json.getObjVal? "error" then
@@ -208,24 +232,27 @@ def geminiStreamChatCompletion (self : GeminiClient) (history : List Message) (o
     let child ← IO.Process.spawn { 
       cmd := "curl", 
       args := #[
+        "--max-time", "10",
         "-N", "-s", "-L", "-X", "POST", 
         "-H", "Content-Type: application/json", 
         "-H", s!"x-goog-api-key: {self.apiKey}",
         "-d", jsonReq, 
         url
       ], 
-      stdout := .piped, stderr := .piped 
+      stdout := .piped, stderr := .null 
     }
     
     let parts ← readStream child.stdout []
     IO.println ""
     
-    let _ ← child.wait
+    let exitCode ← child.wait
+    if exitCode != 0 then
+      return Except.error (AppError.NetworkError s!"curl process exited with code {exitCode}")
     
     let mut messageParts : List MessagePart := []
     for p in parts do
-      if let some mp ← geminiPartToMessage (toJson p) then
-        messageParts := mp :: messageParts
+      let mp := geminiPartToMessageDirect p
+      messageParts := mp :: messageParts
     
     if messageParts.isEmpty then
       return Except.error (AppError.LlmError "LLM returned empty response")
