@@ -14,7 +14,7 @@ Usage: lyceum [--help]"
   let apiKey ← IO.getEnv "GEMINI_API_KEY"
   let modelName := "gemini-2.0-flash-exp"
   
-  IO.println "Lyceum MCP Server starting..."
+  IO.eprintln "Lyceum MCP Server starting..."
   if apiKey.isNone then
     IO.eprintln "Warning: GEMINI_API_KEY not set. LLM calls will fail."
 
@@ -35,7 +35,10 @@ Usage: lyceum [--help]"
             let (action, nextState) := serverAgent.step state (Input.Request (toJson req))
             state := nextState
             match action with
-            | Action.Respond res => pure <| Except.ok (fromJson? res |>.toOption.get!)
+            | Action.Respond res =>
+                match (fromJson? res : Except String JsonRpc.Response) with
+                | .ok r => pure <| Except.ok r
+                | .error e => pure <| Except.error (AppError.ParseError s!"Failed to parse response: {e}")
             | Action.CallLlm callId history =>
                 let client : GeminiClient := { apiUrl := "https://generativelanguage.googleapis.com", apiKey := apiKey.getD "", modelName := some modelName }
                 match ← LlmBackend.streamChatCompletion client history none with
@@ -59,4 +62,4 @@ Usage: lyceum [--help]"
         stdout.putStrLn (Json.compress (toJson errRes))
         stdout.flush
 
-  IO.println "Lyceum MCP Server shutting down."
+  IO.eprintln "Lyceum MCP Server shutting down."

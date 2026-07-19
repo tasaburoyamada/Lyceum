@@ -140,3 +140,4 @@ structure InitializeResult where
 deriving Repr, ToJson, FromJson, BEq, Inhabited
 
 end Lyceum
+

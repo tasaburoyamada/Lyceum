@@ -180,14 +180,16 @@ partial def readStream (handle : IO.FS.Handle) (acc : List GeminiPart) : IO (Lis
 
 def geminiListModels (self : GeminiClient) : IO (Except AppError (List String)) := do
     let baseUrl := if self.apiUrl.endsWith "/" then self.apiUrl else self.apiUrl ++ "/"
-    let url := s!"{baseUrl}v1beta/models?key={self.apiKey}"
+    let isOAuth := self.apiKey.startsWith "ya29."
+    let url := if isOAuth then s!"{baseUrl}v1beta/models" else s!"{baseUrl}v1beta/models?key={self.apiKey}"
+    let authHeader := if isOAuth then s!"Authorization: Bearer {self.apiKey}" else s!"x-goog-api-key: {self.apiKey}"
     let child ← IO.Process.spawn { 
       cmd := "curl", 
       args := #[
         "--max-time", "5",
         "-s", "-L", "-X", "GET", 
         "-H", "Content-Type: application/json", 
-        "-H", s!"x-goog-api-key: {self.apiKey}",
+        "-H", authHeader,
         url
       ], 
       stdout := .piped, stderr := .null 
@@ -203,15 +205,14 @@ def geminiListModels (self : GeminiClient) : IO (Except AppError (List String)) 
             | .ok (.str s) => s
             | _ => "Unknown API error"
           return Except.error (AppError.LlmError s!"Gemini API Error (listModels): {msg}")
-
-      let parseModels : Except String (List String) := do
-        let modelsArr ← json.getObjVal? "models"
-        let arr ← modelsArr.getArr?
-        return arr.toList.filterMap (fun j => match j.getObjVal? "name" with | .ok (.str s) => some s | _ => none)
-      match parseModels with 
-      | .ok names => return Except.ok names 
-      | .error e => return Except.error (AppError.LlmError s!"Failed to parse models: {e}. Response: {out}")
-  | .error e => return Except.error (AppError.LlmError s!"JSON parse failed: {e}. Response: {out}")
+        let parseModels (j : Lean.Json) : Except String (List String) := do
+          let modelsArr ← j.getObjVal? "models"
+          let arr ← modelsArr.getArr?
+          return arr.toList.filterMap (fun x => match x.getObjVal? "name" with | .ok (.str s) => some s | _ => none)
+        match parseModels json with 
+        | .ok names => return Except.ok names 
+        | .error e => return Except.error (AppError.LlmError s!"Failed to parse models: {e}. Response: {out}")
+    | .error e => return Except.error (AppError.LlmError s!"JSON parse failed: {e}. Response: {out}")
 
 def geminiStreamChatCompletion (self : GeminiClient) (history : List Message) (options : Option LlmRequestOptions) : IO (Except AppError (List Message)) := do
     let (system, contents) ← messagesToGemini history
@@ -227,7 +228,9 @@ def geminiStreamChatCompletion (self : GeminiClient) (history : List Message) (o
       | none => return Except.error (AppError.ConfigError "No model name specified for Gemini client")
     
     let baseUrl := if self.apiUrl.endsWith "/" then self.apiUrl else self.apiUrl ++ "/"
-    let url := s!"{baseUrl}v1beta/{model}:streamGenerateContent?alt=sse&key={self.apiKey}"
+    let isOAuth := self.apiKey.startsWith "ya29."
+    let url := if isOAuth then s!"{baseUrl}v1beta/{model}:streamGenerateContent?alt=sse" else s!"{baseUrl}v1beta/{model}:streamGenerateContent?alt=sse&key={self.apiKey}"
+    let authHeader := if isOAuth then s!"Authorization: Bearer {self.apiKey}" else s!"x-goog-api-key: {self.apiKey}"
     
     let child ← IO.Process.spawn { 
       cmd := "curl", 
@@ -235,7 +238,7 @@ def geminiStreamChatCompletion (self : GeminiClient) (history : List Message) (o
         "--max-time", "10",
         "-N", "-s", "-L", "-X", "POST", 
         "-H", "Content-Type: application/json", 
-        "-H", s!"x-goog-api-key: {self.apiKey}",
+        "-H", authHeader,
         "-d", jsonReq, 
         url
       ], 
