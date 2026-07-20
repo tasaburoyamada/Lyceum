@@ -48,6 +48,10 @@ def Vocab.getId (v : Vocab) (token : String) : Option Nat :=
 def Vocab.getToken (v : Vocab) (id : Nat) : Option String :=
   v.idToToken.find? id
 
+/-- IDのリストからテキストをデコードする -/
+def Vocab.decode (v : Vocab) (ids : List Nat) : String :=
+  ids.foldl (fun acc id => acc ++ (match v.getToken id with | some s => s | none => "")) ""
+
 /-- 
 バイト値 (0-255) に対応するトークン ID を検索する。
 Gemma 等のモデルでは <0xNN> という形式で語彙に含まれている。

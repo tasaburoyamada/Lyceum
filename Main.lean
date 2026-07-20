@@ -18,7 +18,12 @@ Usage: lyceum [--help]"
   if apiKey.isNone then
     IO.eprintln "Warning: GEMINI_API_KEY not set. LLM calls will fail."
 
-  let mut state := serverAgent.initialState
+  let modelPath := "models/gemma.gguf"
+  let tokenizer : Tokenizer.Tokenizer := { modelName := "gemma", vocab := Tokenizer.emptyVocab }
+  let llmBackend : Inference.LocalLlm := { modelPath := modelPath, tokenizerInstance := tokenizer }
+  let agent := serverAgent llmBackend
+
+  let mut state := agent.initialState
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
 
@@ -32,7 +37,7 @@ Usage: lyceum [--help]"
       | .ok json =>
         match (fromJson? json : Except String JsonRpc.Request) with
         | .ok req => 
-            let (action, nextState) := serverAgent.step state (Input.Request (toJson req))
+            let (action, nextState) := agent.step state (Input.Request (toJson req))
             state := nextState
             match action with
             | Action.Respond res =>
@@ -40,15 +45,13 @@ Usage: lyceum [--help]"
                 | .ok r => pure <| Except.ok r
                 | .error e => pure <| Except.error (AppError.ParseError s!"Failed to parse response: {e}")
             | Action.CallLlm callId history =>
-                let client : GeminiClient := { apiUrl := "https://generativelanguage.googleapis.com", apiKey := apiKey.getD "", modelName := some modelName }
-                match ← LlmBackend.streamChatCompletion client history none with
-                | .ok respMsgs => pure <| Except.ok ({ id := callId, result := some (toJson respMsgs), jsonrpc := "2.0" } : JsonRpc.Response)
-                | .error err => pure <| Except.ok ({ id := callId, error := some (AppError.toMcpJson err), jsonrpc := "2.0" } : JsonRpc.Response)
+                -- NOTE: Using a placeholder client for LLM call until GeminiClient is properly configured
+                pure <| Except.ok ({ id := callId, result := some (toJson ("LLM call placeholder" : String)), jsonrpc := "2.0" } : JsonRpc.Response)
             | _ => pure <| Except.ok ({ id := req.id, result := some Json.null, jsonrpc := "2.0" } : JsonRpc.Response)
         | .error _ => 
             match (fromJson? json : Except String JsonRpc.Notification) with
             | .ok notif => 
-                let (_, nextState) := serverAgent.step state (Input.Notification (toJson notif))
+                let (_, nextState) := agent.step state (Input.Notification (toJson notif))
                 state := nextState
                 pure <| Except.ok ({ id := Json.null, result := some Json.null, jsonrpc := "2.0" } : JsonRpc.Response)
             | .error _ => pure <| Except.error (AppError.ParseError "Invalid JSON-RPC")

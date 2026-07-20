@@ -15,7 +15,11 @@ instance : LlmBackend MockLlmBackend where
     else
       return .ok [Message.mkText .assistant "Mock response"]
   
-  streamContext _ _ _ _ := return .error (.Unknown "Not implemented")
+  streamContext self _ _ _ :=
+    if self.shouldFail then
+      return .error (.LlmError self.errorMessage)
+    else
+      return .ok [Message.mkText .assistant "Mock context response"]
   listModels _ := return .ok ["mock-model"]
 
 end Lyceum.Test

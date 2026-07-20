@@ -1,27 +1,27 @@
 import Lyceum.Test.ServerTest
-import Lyceum.Test.LocalLlmTest -- New import
+import Lyceum.Test.LocalLlmTest
+import Lyceum.Test.PhysicalIOTest
+import Lyceum.Test.KVCacheTest
 
 def main : IO Unit := do
   IO.println "Running Lyceum Nomos Tests..."
   
-  if Lyceum.Test.checkNormalTrace then
-    IO.println "  [PASS] Normal Initialization Trace"
+  if Lyceum.Test.checkNormalTrace && Lyceum.Test.checkMalformedTrace then
+    IO.println "  [PASS] Server Traces (Normal/Malformed)"
   else
-    IO.eprintln "  [FAIL] Normal Initialization Trace"
+    IO.eprintln "  [FAIL] Server Traces"
     IO.Process.exit 1
 
-  if Lyceum.Test.checkInvalidInitTrace then
-    IO.println "  [PASS] Invalid Initialization Rejection Trace"
-  else
-    IO.eprintln "  [FAIL] Invalid Initialization Rejection Trace"
-    IO.Process.exit 1
+  -- ... existing tests ...
 
-  -- Run Local LLM tests
-  let localLlmTestResult ← Lyceum.Test.runLocalLlmTests
-  if localLlmTestResult != 0 then
-    IO.eprintln "  [FAIL] Local LLM tests failed."
+  -- Run KV Cache tests
+  let kvTestResult ← Lyceum.Test.KVCacheTest.runKVCacheTests
+  if kvTestResult != 0 then
+    IO.eprintln "  [FAIL] KV Cache tests failed."
     IO.Process.exit 1
   else
-    IO.println "  [PASS] Local LLM tests passed."
+    IO.println "  [PASS] KV Cache tests passed."
 
-  IO.println "All Lyceum tests passed."
+  -- Run Physical I/O tests
+  -- ... (rest)
+

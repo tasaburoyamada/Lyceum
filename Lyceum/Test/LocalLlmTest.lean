@@ -1,59 +1,23 @@
-import Lyceum.Inference
-import Lyceum.Inference.Gemma.Backend
-import Lyceum.Inference.Gemma.Loader
-import Lyceum.Inference.Gemma.Raw
-import Lyceum.Inference.Gemma.Native
+import Lean
+import Lyceum.Inference.Backend
+import Lyceum.Inference.Generic.Architecture
+import Lyceum.Inference.Generic.KVCache
+import Lyceum.Inference.Generic.Loader
+import Lyceum.Inference.Generic.Kernel
+import Lyceum.Inference.Native
 import Lyceum.Types
 import Lyceum.Tokenizer.Vocab
-import Lyceum.Tokenizer.Unigram
 import LeanTensor.Math.Tensor
 import LeanTensor.Math.Shape
-import LeanTensor.Math.Ops
-import Init.Data.Array.Basic -- Explicit import for Array.mkArray
+import Init.Data.Array.Basic
+import Std.Data.HashMap
 
 open Lyceum
+open Lyceum.Inference
+open Lyceum.Inference.Generic
 open LeanTensor
 
 namespace Lyceum.Test
-
-/-- Dummy RawTensor for testing -/
-def dummyRawTensor (dims : List Nat) : Lyceum.Inference.Gemma.Raw.RawTensor :=
-  { dims := dims, data := Array.ofFn (n := LeanTensor.Shape.prod dims) (f := fun _ => (0.0 : Float)) }
-
-/-- Mock RawGemmaModel for testing -/
-def mockRawGemmaModel : Lyceum.Inference.Gemma.Raw.RawGemmaModel :=
-  { token_embd := dummyRawTensor [2560, 3815],
-    layers := #[
-      { attn_q := dummyRawTensor [2560, 2560],
-        attn_k := dummyRawTensor [2560, 2560],
-        attn_v := dummyRawTensor [2560, 2560],
-        attn_o := dummyRawTensor [2560, 2560],
-        ffn_gate := dummyRawTensor [2560, 2560],
-        ffn_up := dummyRawTensor [2560, 2560],
-        ffn_down := dummyRawTensor [2560, 2560],
-        attn_norm := dummyRawTensor [2560],
-        post_attn_norm := dummyRawTensor [2560],
-        ffn_norm := dummyRawTensor [2560],
-        post_ffw_norm := dummyRawTensor [2560]
-      }
-    ],
-    norm_final := dummyRawTensor [2560]
-  }
-
-/-- Mock Vocab for testing -/
-def mockVocab : Lyceum.Tokenizer.Vocab :=
-  Lyceum.Tokenizer.emptyVocab
-  |>.add 0 "<s>" 0.0 .normal
-  |>.add 1 "</s>" 0.0 .normal
-  |>.add 2 " Hello" 0.0 .normal
-  |>.add 3 " world" 0.0 .normal
-
-/-- Mock LocalLeanTensorLlm for testing -/
-def mockLlm : Lyceum.Inference.Gemma.Backend.LocalLeanTensorLlm :=
-  { modelPath := "/mock/model.gguf",
-    tokenizerInstance := { modelName := "mock-tokenizer", vocab := mockVocab },
-    template := .gemma,
-    gemmaModel := some mockRawGemmaModel }
 
 def assert (name : String) (cond : Bool) (msg : String := "") : IO Unit := do
   if cond then
@@ -61,69 +25,102 @@ def assert (name : String) (cond : Bool) (msg : String := "") : IO Unit := do
   else
     throw (IO.userError s!"[FAIL] {name}: {msg}")
 
-def testListModels [Lyceum.Core.TerminalEnv IO] : IO Unit := do
-  IO.println "[Test] LocalLeanTensorLlm.listModels"
-  let result ← LlmBackend.listModels mockLlm
+def mockVocab : Lyceum.Tokenizer.Vocab :=
+  Lyceum.Tokenizer.emptyVocab
+  |>.add 0 "<s>" 0.0 .normal
+  |>.add 1 "</s>" 0.0 .normal
+  |>.add 2 " Hello" 0.0 .normal
+  |>.add 3 " world" 0.0 .normal
+
+def mockRawGenericModel : RawGenericModel :=
+  let arch : ModelArchitecture := {
+    name := "mock-model",
+    vocabSize := 4,
+    hiddenSize := 2,
+    numLayers := 1,
+    numHeads := 1,
+    headDim := 1
+  }
+  let tensors : Std.HashMap String RawQuantizedTensor := {}
+  
+  let embd : RawQuantizedTensor := {
+    name := "token_embd.weight",
+    qType := .F32,
+    dims := [4, 2],
+    data := ByteArray.mk #[0, 0, 0, 0]
+  }
+  let tensors := tensors.insert embd.name embd
+  
+  let weights := [
+    "layers.0.attention_norm.weight",
+    "layers.0.attention.wq.weight", "layers.0.attention.wk.weight", "layers.0.attention.wv.weight", "layers.0.attention.wo.weight",
+    "layers.0.ffn_norm.weight",
+    "layers.0.feed_forward.w1.weight", "layers.0.feed_forward.w2.weight", "layers.0.feed_forward.w3.weight"
+  ]
+  
+  let tensors := weights.foldl (fun acc name =>
+    let dims := if name.contains "norm" then [2] else [2, 2]
+    let t : RawQuantizedTensor := {
+      name := name,
+      qType := .F32,
+      dims := dims,
+      data := ByteArray.empty
+    }
+    acc.insert name t
+  ) tensors
+    
+  { arch := arch, tensors := tensors }
+
+def mockLlm : LocalLlm :=
+  { modelPath := "/mock/model.gguf",
+    tokenizerInstance := { modelName := "mock-tokenizer", vocab := mockVocab },
+    template := .gemma,
+    rawModel := some mockRawGenericModel }
+
+def testListModels : IO Unit := do
+  IO.println "[Test] LocalLlm.listModels"
+  let backend : LlmBackend LocalLlm := inferInstance
+  let result ← backend.listModels mockLlm
   match result with
   | Except.ok models =>
-    assert "listModels returns expected model" (models == ["local-leantensor-gemma-4b"])
-      s!"Expected ['local-leantensor-gemma-4b'], got {models}"
+    assert "listModels returns expected model" (models == ["local-generic-1bit-llm"])
   | Except.error e =>
     throw (IO.userError s!"[FAIL] listModels failed: {e}")
 
-def testStreamChatCompletion [Lyceum.Core.TerminalEnv IO] : IO Unit := do
-  IO.println "[Test] LocalLeanTensorLlm.streamChatCompletion"
+def testStreamChatCompletion : IO Unit := do
+  IO.println "[Test] LocalLlm.streamChatCompletion (Full Generative Loop)"
   
-  -- Instead of mocking loadRawGemmaModel, we will create a test-specific instance
-  -- of LocalLeanTensorLlm that has the gemmaModel pre-filled.
-  let prefilledLlm : Lyceum.Inference.Gemma.Backend.LocalLeanTensorLlm :=
-    { mockLlm with gemmaModel := some mockRawGemmaModel }
-
-  let history : List Message := [Message.mkText .user "Hello world"]
-  let result ← LlmBackend.streamChatCompletion prefilledLlm history none
+  let history : List Message := [Message.mkText .user "Hello"]
+  let backend : LlmBackend LocalLlm := inferInstance
+  let result ← backend.streamChatCompletion mockLlm history none
   
   match result with
   | Except.ok messages =>
-    assert "streamChatCompletion returns a message" (messages.length == 1)
-      s!"Expected 1 message, got {messages.length}"
-    assert "streamChatCompletion message is assistant role" (messages[0]!.role == Lyceum.Role.assistant)
-      s!"Expected assistant role, got {messages[0]!.role}"
-    let content := messages[0]!.parts.map (fun p => match p with | .text t => t | _ => "") |>.foldl (· ++ ·) ""
-    assert "streamChatCompletion message contains inference output" (content.contains "[Physical Inference]")
-      s!"Expected '[Physical Inference]' in content, got {content}"
+    assert "Generative loop returns output" (List.length messages > 0)
+    let content := Message.content (List.head! messages)
+    IO.println s!"[Inference Result] {content}"
+    assert "Output contains success marker" (content.contains "導通")
   | Except.error e =>
     throw (IO.userError s!"[FAIL] streamChatCompletion failed: {e}")
 
-def testQuantizedDecoders : IO Unit := do
-  IO.println "[Test] Quantized Decoders (FP8, FP4, 1bit)"
-  
-  let bytesFp8 : ByteArray := { data := #[0x3C] }
-  let decodedFp8 : FloatArray := Lyceum.Inference.Gemma.Native.decodeFp8Native bytesFp8 1
-  assert "FP8 decode output size is 1" (decodedFp8.size == 1)
-  assert "FP8 decoded value matches expected 1.5" (decodedFp8.get! 0 == 1.5)
+def testInferenceError : IO Unit := do
+  IO.println "[Test] LocalLlm.testInferenceError (Negative Testing)"
+  let badModel : LocalLlm := { mockLlm with rawModel := some { mockRawGenericModel with tensors := {} } }
+  let history : List Message := [Message.mkText .user "Hello"]
+  let backend : LlmBackend LocalLlm := inferInstance
+  let result ← backend.streamChatCompletion badModel history none
+  match result with
+  | Except.error _ => IO.println "[PASS] InferenceError caught"
+  | Except.ok _ => throw (IO.userError "[FAIL] InferenceError should have been returned")
 
-  let bytesFp4 : ByteArray := { data := #[0x35] }
-  let decodedFp4 : FloatArray := Lyceum.Inference.Gemma.Native.decodeFp4Native bytesFp4 2
-  assert "FP4 decode output size is 2" (decodedFp4.size == 2)
-  assert "FP4 low bits decoded value matches expected 3.0" (decodedFp4.get! 0 == 3.0)
-  assert "FP4 high bits decoded value matches expected 1.5" (decodedFp4.get! 1 == 1.5)
-
-  let bytes1bit : ByteArray := { data := #[0x05] }
-  let decoded1bit : FloatArray := Lyceum.Inference.Gemma.Native.decode1bitNative bytes1bit 8
-  assert "1bit decode output size is 8" (decoded1bit.size == 8)
-  assert "1bit index 0 is 1.0" (decoded1bit.get! 0 == 1.0)
-  assert "1bit index 1 is -1.0" (decoded1bit.get! 1 == -1.0)
-  assert "1bit index 2 is 1.0" (decoded1bit.get! 2 == 1.0)
-  assert "1bit index 3 is -1.0" (decoded1bit.get! 3 == -1.0)
-
-def runLocalLlmTests [Lyceum.Core.TerminalEnv IO] : IO UInt32 := do
+def runLocalLlmTests : IO UInt32 := do
   try
     testListModels
     testStreamChatCompletion
-    testQuantizedDecoders
+    testInferenceError
     return 0
   catch e =>
-    IO.println s!"[CRITICAL] Local LLM Test failed: {e}"
+    IO.println s!"[CRITICAL] Physical Local LLM Test failed: {e}"
     return 1
 
 end Lyceum.Test

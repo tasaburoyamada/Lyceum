@@ -18,7 +18,7 @@ instance : TerminalEnv IO where
   enableRawMode := pure (Except.ok false) -- Corrected type
   disableRawMode := pure ()
   isRawMode := pure false -- Corrected type
-  spawnBrowser url := pure false -- Corrected type
+  spawnBrowser _ := pure false -- Corrected type
   getTerminalSize := pure (0, 0) -- Corrected type
   loadHistory path := do
     if !(← path.pathExists) then
