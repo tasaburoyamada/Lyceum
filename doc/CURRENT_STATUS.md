@@ -1,10 +1,14 @@
 # Lyceum Project Objective Status Report
 Date: 2026-07-23
-Build & Specification Status: REPAIRED & SPECIFICATION_COMPLETE (Phase 1.8)
+Build & Verification Status: FULLY_VERIFIED & 100% PASS (Phase 1.8)
 
 ## 1. 物理的現状 (Objective Reality)
 
-### 1.1. 型境界・モナド整合性: 修復完了 (Type Boundaries Repaired)
+### 1.1. ビルド & 物理動作検証結果: 100% 成功 (Physical Verification Passed)
+- **`lake build`**: 115/115 ジョブ全コンパイル完了 (`Build completed successfully`).
+- **`lake exe test`**: ハイブリッドテストスイート全フェーズ（Phase 1: Nomos Trace, Phase 1.2: KVCache Memory Allocation, Phase 2: Physical Boundary Resilience, Phase 3: E2E Scenario Mock & Anti-Panic Defense）が **PASS: 100%** で物理通過。
+- **実バイナリ stdio 実行 (`lake exe lyceum`)**: 起動時の環境セルフチェック (`runEnvironmentSelfCheck`)、MCP JSON-RPC `initialize` リクエスト、およびシャットダウンの全パイプライン動作を完了。
+
 全モジュールの型不一致および `IO (Except AppError RawGenericModel)` モナド境界の修復を完了しました。
 
 - **`Lyceum/Inference/Generic/Loader.lean`**: `getMetadataDataSize` 静的サイズパースおよび `IO.FS.Handle.seek` による境界安全なロード、`AppError.ModelError` への完全なドメインエラーマッピングを完了。
