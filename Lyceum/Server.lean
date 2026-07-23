@@ -21,8 +21,19 @@ def serverAgent (llmBackend : Inference.LocalLlm) : Agent ServerState Input Acti
     match s, i with
     -- ... (initialize)
     
+    | ServerState.Uninitialized, Input.Request reqJson =>
+        match (fromJson? reqJson : Except String JsonRpc.Request) with
+        | .ok req =>
+          if req.method == "initialize" then
+            (Action.Respond (toJson { id := req.id, result := some (toJson ({ protocolVersion := "2.0", capabilities := Json.null, serverInfo := { name := "Lyceum", version := "0.1" } } : InitializeResult)), jsonrpc := "2.0" : JsonRpc.Response }), ServerState.Initialized { apiKey := "", modelName := "" })
+          else
+            (Action.Respond (toJson { id := req.id, error := some (AppError.toMcpJson (AppError.ParseError "Server not initialized")), jsonrpc := "2.0" : JsonRpc.Response }), ServerState.Uninitialized)
+
+        | .error _ =>
+            (Action.Respond (toJson { id := Json.null, error := some (AppError.toMcpJson (AppError.ParseError "Invalid JSON-RPC")), jsonrpc := "2.0" : JsonRpc.Response }), ServerState.Uninitialized)
     | ServerState.Uninitialized, _ => (Action.None, ServerState.Uninitialized)
     | ServerState.Shutdown, _ => (Action.None, ServerState.Shutdown)
+
     | ServerState.Initialized _, Input.Notification _ => (Action.None, s)
     
     | ServerState.Initialized config, Input.Request reqJson =>

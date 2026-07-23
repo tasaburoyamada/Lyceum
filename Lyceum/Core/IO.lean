@@ -14,8 +14,9 @@ def close (handle : IO.FS.Handle) : IO Unit :=
 
 /-- ファイルの権限変更を抽象化 -/
 def chmod (path : System.FilePath) (mode : UInt32) : IO Unit := do
-  -- 物理的な chmod コマンドを実行する
-  let _ ← IO.Process.run { cmd := "chmod", args := #[s!"{mode}", path.toString] }
+  let octalStr := String.mk (Nat.toDigits 8 mode.toNat)
+  let _ ← IO.Process.run { cmd := "chmod", args := #[octalStr, path.toString] }
   pure ()
+
 
 end Lyceum.Core.IO

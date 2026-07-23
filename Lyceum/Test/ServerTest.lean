@@ -16,7 +16,8 @@ def reqShutdown : Json := toJson ({ id := 2, method := "shutdown", jsonrpc := "2
 def resShutdown : Json := toJson ({ id := 2, jsonrpc := "2.0", result := some Json.null, error := none } : JsonRpc.Response)
 def notifExit : Json := toJson ({ method := "exit", jsonrpc := "2.0", params := some Json.null } : JsonRpc.Notification)
 
-def reqUnknownTool : Json := toJson ({ id := 3, method := "tools/call", jsonrpc := "2.0", params := some (toJson ({ name := "non_existent_tool", arguments := Json.null })) } : JsonRpc.Request)
+def reqUnknownTool : Json := toJson ({ id := 3, method := "tools/call", jsonrpc := "2.0", params := some (Json.mkObj [("name", Json.str "non_existent_tool"), ("arguments", Json.null)]) } : JsonRpc.Request)
+
 
 /-- 正常なプロトコルシーケンスのトレース -/
 def normalTrace : Trace ServerState Input Action := [
@@ -34,8 +35,9 @@ def checkNormalTrace : Bool :=
 
 def malformedJson : Json := Json.str "not a json object"
 def malformedJsonTrace : Trace ServerState Input Action := [
-  (.Uninitialized, .Request malformedJson, .Respond (toJson ({ id := Json.null, error := some (Json.str "Invalid JSON-RPC"), jsonrpc := "2.0" } : JsonRpc.Response)))
+  (.Uninitialized, .Request malformedJson, .Respond (toJson ({ id := Json.null, error := some (AppError.toMcpJson (AppError.ParseError "Invalid JSON-RPC")), jsonrpc := "2.0" } : JsonRpc.Response)))
 ]
+
 
 def checkMalformedTrace : Bool :=
   IsConsistentTrace testAgent malformedJsonTrace
