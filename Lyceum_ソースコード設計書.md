@@ -34,14 +34,37 @@ Lyceum が扱う全データの「型」を定義する最も基礎的なモジ�
 -   **JSON 変換と SSE パース**: `MessagePart` から `GeminiPart` への相互変換ロジックと、Server-Sent Events のチャンクパーサー（`parseSseChunk`）を実装します。
     -   **最適化**: JSON 経由での冗長な再パースを防ぐため、`GeminiPart` から `MessagePart` へのパターンマッチングによる直接変換（`geminiPartToMessageDirect`）および `curl` プロセスの終了コードに基づく厳密なエラーハンドリングが実装されています。
 
-### 3.4. `Inference/Gemma/Native.lean` (物理演算・量子化デコード)
+### 3.4. `Inference/Generic/` (ローカル推論エンジン & GGUF ロード)
+ローカルでの GGUF モデルパースおよびトランスフォーマー演算を担うモジュール群です。
+-   **`Architecture.lean`**:
+    -   `ModelArchitecture`: 語彙サイズ（`vocabSize`）、隠れ層サイズ（`hiddenSize`）、層数（`numLayers`）、ヘッド数（`numHeads`）、ヘッド次元（`headDim`）を保持する静的構造体。
+    -   `QuantizationType`: `F32`, `Q4_0`, `Q1_K` 等の量子化種別の列挙型。
+-   **`Loader.lean`**:
+    -   `loadRawGenericModel : (modelPath : String) → [Lyceum.Core.TerminalEnv IO] → IO (Except AppError RawGenericModel)`
+    -   **契約と型不変条件**: GGUF ファイルメタデータサイズから `infoStartOff` を物理計算し、`IO.FS.Handle.seek` でテンソル領域の開始位置へ跳躍。物理シークとデータロードを実行し、`AppError` ドメインエラー型に安全にマッピングする。
+-   **`KVCache.lean`**:
+    -   `KVCache`: 各レイヤーごとの Key/Value テンソル状態。動的配列のリサイズコピーを排除し、再利用可能な構造として保持。
+-   **`Kernel.lean`**:
+    -   `runTransformerBlock`: RMSNorm, Multi-Head Attention (RoPE適用), FFN (SwiGLU) のトランスフォーマー評価ループ。
+    -   `sampleTopP`: 温度スケーリングおよび Top-P (Nucleus) サンプリングアルゴリズム。
+
+### 3.5. `Inference/Gemma/Native.lean` (物理演算・量子化デコード)
 ローカル推論およびテンソルデコードを担う低レイヤモジュールです。
 -   **デコーダ**: FP16 物理デコード、およびルックアップテーブル（LUT）方式を用いた高速量子化デコーダ（FP8, FP4, 1bit）を実装しています。
 -   **演算の最適化**: `matmulNative`（行列積）および各デコーダにおいて、`Array.ofFn` を活用して一時的なヒープメモリの `push` や `set!` コピーを完全に排除した $\mathcal{O}(1)$ アロケーション設計を採用しています。
 
-### 3.5. `Memory/VectorDB.lean` (ベクトルデータベース)
+### 3.6. `Memory/VectorDB.lean` (ベクトルデータベース)
 インメモリ型の類似度検索エンジンです。
 -   **アロケーションフリー類似度演算**: `cosineSimilarity` において、`FloatArray` への一時的なメモリ詰め替えを排除し、単一ループ走査で内積とノルムを同時に計算することで計算効率を極大化しています。
+
+### 3.7. `Core/Environment.lean` & `Core/IO.lean` (物理環境の抽象化)
+OS 依存のファイル操作およびプロセス制御を型クラス `TerminalEnv` で抽象化します。
+-   **`TerminalEnv IO`**: `fileRead`, `fileWrite`, `fileSeek`, `spawnProcess` 等の環境依存処理をカプセル化。テスト時の Mock 環境（Nomos Contract）差し替えと本番 `IO` モナド実行をシームレスに切り替えます。
+
+### 3.8. `Server.lean` & `JsonRpc.lean` (MCP 通信基盤)
+MCP (Model Context Protocol) 規格に準拠した JSON-RPC 2.0 通信ハンドラーです。
+-   **`handleMessage`**: `initialize`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `prompts/get` 等のメッセージを透過的にパース・実行。
+-   **防腐処理**: 入力エラーや不正 JSON に対し、ユーザー体験を損なうパニックを完全に防ぎ、ドメイン化された JSON-RPC エラーオブジェクトを安全に返却。
 
 ## 4. 横断的関心事とシステム統合の制約
 
@@ -53,3 +76,4 @@ Pakila 側から Lyceum の `LlmBackend.streamChatCompletion` などを呼び出
 ### 4.2. 名前空間と型の一致
 -   **`Lyceum.AppError`**: Pakila 内部で独自に `AppError` が定義されている場合、Lyceum の関数が返す `Except Lyceum.AppError ...` と型が衝突します。この場合、Pakila 側でエラー型の変換マッピングを実装するか、Lyceum のエラー型をそのまま引き回す設計に統一する必要があります。
 -   **`Lyceum.LlmClient`**: 外部から Gemini クライントを使用する場合は、この名前空間を経由する必要があります。
+
