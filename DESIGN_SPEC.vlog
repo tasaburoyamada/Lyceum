@@ -1,32 +1,11 @@
-@CTX:[DOM:PROJECT_LYCEUM|SUB:END_STATE_DEFINITION|GOAL:PROVABLE_LLM_CONTROL_PLANE]
-
+@CTX:[DOM:Lyceum|SUB:Core_Framework|GOAL:Transfer_Protocol_and_Governance_from_Pakila]
 @BIAS:{P:1.0, M:1.0, S:1.0, D:1.0, C:1.0}
-
+@DELTA(Lyceum_Protocol_Governance_Core > Local_Pakila_Duplication)
++ [Lyceum_Protocol_Types_MachineAction]
++ [Lyceum_Protocol_Parser_Deterministic]
++ [Lyceum_Governance_Vlog_StateLog]
++ [Lyceum_Governance_SelfHealer]
+! [115Jobs_Full_Pass_Verified]
 @CONCEPT
-[[MCP_NATIVE_HUB]] [[FORMAL_VERIFIED_ROUTING]] [[LEAN4_RAG_KERNEL]] [[NOMOS_GOVERNED_EXECUTION]] [[MULTI_MODAL_CONSISTENCY]] [[STATE_PERSISTENCE_DAEMON]] [[SCENARIO_TEST_GOVERNANCE]] [[ZERO_PANIC_FALLBACK]]
-
-@SHIFT
-+ [JSON_RPC_2_0_FORMALISM]
-+ [VECTOR_SPACE_ABSTRACTION]
-+ [CONTEXT_INJECTION_SAFETY]
-+ [SYMBOLIC_REASONING_GATE]
-+ [ANTI_CORRUPTION_LAYER_DEFENSE]
-+ [O1_ALLOCATION_FREE_EXECUTION]
-- [UNVERIFIED_PYTHON_RAG]
-- [STOCHASTIC_TOOL_CALLING]
-- [EXPLICIT_USER_ERROR_PANIC]
-! [TYPE_SAFE_PROTOCOL_ADAPTATION]
-! [NOMOS_INVARIANT_ENFORCEMENT]
-! [IO_MONAD_CONTRACT_BOUND]
-
-@STATE: SPECIFICATION_COMPLETE (Phase 1.8)
-- L1 (Interface): MCP Standard (Resources, Tools, Prompts) & Anti-Corruption Layer
-- L2 (Governance): Nomos Framework Logic & Scenario Testing Rules
-- L3 (Knowledge): Lean 4 Native RAG / Vector Engine (O(1) Allocation-Free)
-- L4 (Execution): Generic GGUF / Gemini API Unified Multi-modal Bridge
-
-[REASONING]
-Lyceumは単なるツールではなく、AIの確率的な挙動を数理的な秩序（Nomos）の中に閉じ込めるための「コントロール・プレーン」である。すべてのデータフローは型システムおよびIOモナド境界によって検証され、ハルシネーションと例外パニックは界面（ゲートウェイ）において物理的に遮断される。
-
+[[Nomos_Contract]] [[Protocol_AST]] [[Vlog_Governance]] [[SelfHealer]]
 @EOF
-
