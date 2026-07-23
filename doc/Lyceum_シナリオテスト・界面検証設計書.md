@@ -56,3 +56,17 @@
 
 2. **アロケーションフリー不変条件の自動検証**
    - `VectorDB` コサイン類似度計算および `matmulNative` 実行において、プロファイルツール（または Lean 4 VM アロケーションカウンター）を用い、実行中のヒープ割り当て回数が $\mathcal{O}(1)$（ゼロ増大）であることを自動検証する。
+
+---
+
+## 4. lbir / Symbol32 統合方針とテストコード実装状況
+
+1. **`lbir` 準拠プログラミング**
+   - 本プロジェクトの全 Lean 4 実装（`Lyceum`, `Lyceum.Core`, `Test`）は、`/home/pc241139/sandbox/lbir` に定義された Lean Bytecode Intermediate Representation (`lbir`) 基盤および依存関係と統一して記述される。
+   - 文字コード処理においては `/home/pc241139/sandbox/Symbol32` (`Symbol32`) を標準採用する。
+
+2. **統合テストスイートの実装完備 (`Test.lean`)**
+   - **Phase 1 (Nomos Trace)**: `Lyceum/Test/ServerTest.lean` による JSON-RPC 2.0 正常/異常トレースおよび未定義ツール防腐検証。
+   - **Phase 1.2 (Allocation Invariants)**: `Lyceum/Test/KVCacheTest.lean` によるメモリキャッシュ再利用性の保証。
+   - **Phase 2 (Physical Boundary)**: `Lyceum/Test/PhysicalIOTest.lean` による OS ファイルアクセス権限・不払拒否・存在しないプロセストラッキングの物理実走検証。
+
