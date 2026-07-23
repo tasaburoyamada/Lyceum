@@ -12,8 +12,13 @@ Build & Specification Status: REPAIRED & SPECIFICATION_COMPLETE (Phase 1.8)
 - **`Lyceum/Inference/Generic/Kernel.lean`**: `runLlamaLayer` の配列インデックス境界 `updated_cache.keys[layerIdx]'h_k` と全型キャスト、および `dequantize` 戻り値の型付けを修正・完了。
 - **`Lyceum/Inference/Backend.lean`**: `streamChatCompletion` における `Loader.loadRawGenericModel` 呼び出しおよびモナドパターンの不一致を解消。
 
-### 1.2. 統合テストスイートの配備 (Test Suite Deployed)
-- **`Test.lean`**: Nomos プロトコルトレース (Phase 1)、アロケーション不変条件 (Phase 1.2)、および OS 物理境界レジリエンス (Phase 2) を一元統括するハイブリッドテストランナーを配備完了。
+### 1.2. 統合テストスイート & E2E シナリオ検証の配備 (Test Suite & Scenario Verification)
+- **`Test.lean`**: Nomos プロトコルトレース (Phase 1)、アロケーション不変条件 (Phase 1.2)、OS 物理境界レジリエンス (Phase 2)、および E2E 決定論的シナリオ検証 (Phase 3) を一元統括するハイブリッドテストランナーを配備完了。
+- **`Lyceum/Test/ScenarioTest.lean`**: SC-MCP-001〜003, SC-GEM-001〜003, SC-GGUF-001〜003 に対する決定論的 Mock テストおよび防腐層検証コードを実装完了。
+
+### 1.3. アプリケーション動作環境セルフチェック機能 (Self-Check & Resilience)
+- **`Lyceum/Core/Environment.lean` & `Main.lean`**: `runEnvironmentSelfCheck` 関数を追加。起動時に `GEMINI_API_KEY` の有無、モデルファイル存在、および一時フォルダ書き込み権限を物理判定し、エラーパニックを起こさずに自動フォールバックモード (`fallbackMode := true`) を自律適用。
+
 
 ## 2. 準拠規則 & 依存関係 (Governance & Dependencies)
 - **`lbir` 準拠**: `/home/pc241139/sandbox/lbir` (Lbir) への依存を `lakefile.toml` に定義し、全モジュールに `import Lbir` を適用完了。

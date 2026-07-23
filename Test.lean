@@ -2,12 +2,13 @@ import Lyceum.Test.ServerTest
 import Lyceum.Test.LocalLlmTest
 import Lyceum.Test.PhysicalIOTest
 import Lyceum.Test.KVCacheTest
+import Lyceum.Test.ScenarioTest
 
 /--
 Lyceum ハイブリッド動作保証テストスイート
 Phase 1: Nomos 状態遷移・不変条件テスト
 Phase 2: 物理境界・I/O レジリエンス・プロセストラッキングテスト
-Phase 3: E2E モナド・ブラックボックス総合テスト
+Phase 3: E2E モナド・ブラックボックス決定論的シナリオテスト
 --/
 def main : IO Unit := do
   IO.println "=================================================="
@@ -47,6 +48,16 @@ def main : IO Unit := do
   else
     IO.println "  [PASS] Physical I/O Resilience tests passed."
 
+  -- Phase 3: E2E Scenario Mock Verification
+  IO.println "\n[Phase 3] E2E Scenario Mock & Anti-Panic Defense..."
+  let scenarioTestResult ← Lyceum.Test.ScenarioTest.runScenarioTests
+  if scenarioTestResult != 0 then
+    IO.eprintln "  [FAIL] E2E Scenario tests failed."
+    IO.Process.exit 1
+  else
+    IO.println "  [PASS] E2E Scenario Mock & Anti-Panic tests passed."
+
   IO.println "\n=================================================="
   IO.println "  All Hybrid Tests Successfully Passed (PASS: 100%)"
   IO.println "=================================================="
+

@@ -17,13 +17,14 @@ Usage: lyceum [--help]"
   let modelName := "gemini-2.0-flash-exp"
   
   IO.eprintln "Lyceum MCP Server starting..."
-  if apiKey.isNone then
-    IO.eprintln "Warning: GEMINI_API_KEY not set. LLM calls will fail."
+  let report ← Lyceum.Core.Environment.runEnvironmentSelfCheck "models/gemma.gguf"
+  IO.eprintln report.statusMessage
 
   let modelPath := "models/gemma.gguf"
   let tokenizer : Tokenizer.Tokenizer := { modelName := "gemma", vocab := Tokenizer.emptyVocab }
   let llmBackend : Inference.LocalLlm := { modelPath := modelPath, tokenizerInstance := tokenizer }
   let agent := serverAgent llmBackend
+
 
   let mut state := agent.initialState
   let stdin ← IO.getStdin

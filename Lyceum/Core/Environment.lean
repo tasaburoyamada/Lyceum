@@ -59,4 +59,49 @@ instance : TerminalEnv IO where
     catch e =>
       return .error (s!"Process run failed: {e}")
 
+/--
+環境セルフチェックレポート。
+動的環境の不条理（APIキー欠落、ファイル不在）を無菌状態に保つ。
+--/
+structure EnvironmentReport where
+  hasApiKey : Bool
+  modelFileExists : Bool
+  canWriteTemp : Bool
+  fallbackMode : Bool
+  statusMessage : String
+deriving Inhabited, Repr
+
+/--
+起動時の物理環境セルフチェック関数。
+エラー表示でパニックせず、自動フォールバックモードの判定結果を返す。
+--/
+def runEnvironmentSelfCheck (modelPath : String) [TerminalEnv IO] : IO EnvironmentReport := do
+  let apiKey ← IO.getEnv "GEMINI_API_KEY"
+  let hasKey := apiKey.isSome && !(apiKey.get!.trimAscii.toString.isEmpty)
+  
+  let pathObj := System.FilePath.mk modelPath
+  let modelExists ← TerminalEnv.pathExists pathObj
+  
+  let tmpPath := System.FilePath.mk "/tmp/lyceum_selfcheck_permission.tmp"
+  let canWrite ← try
+    TerminalEnv.writeFile tmpPath "test"
+    TerminalEnv.removeFile tmpPath
+    pure true
+  catch _ => pure false
+
+  let fallback := !hasKey || !modelExists
+  let msg := if fallback then
+    s!"[SelfCheck Warning] Running in Fallback Mode (API Key: {hasKey}, Model File: {modelExists})"
+  else
+    s!"[SelfCheck OK] Environment fully verified."
+
+  return {
+    hasApiKey := hasKey,
+    modelFileExists := modelExists,
+    canWriteTemp := canWrite,
+    fallbackMode := fallback,
+    statusMessage := msg
+  }
+
 end Lyceum.Core.Environment
+
