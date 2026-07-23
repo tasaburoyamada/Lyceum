@@ -1,16 +1,13 @@
 import Lean
 import Lyceum.Types
-import Lyceum.Inference -- For AppError
-import Lyceum.Inference.Gemma.Embedding -- For Vector
-import Lyceum.Inference.Gemma.Native -- For dotProductNative, normNative
-import Lyceum.Core.Environment -- For TerminalEnv
+import Lyceum.Inference
+import Lyceum.Core.Environment
 
 open Lyceum
-open Lyceum.Core -- New open statement
+open Lyceum.Core
 open Lean hiding Message
-open Lyceum.Core.Environment -- Open to bring TerminalEnv into scope
-open Lyceum.Inference.Gemma.Embedding -- Open to bring Vector into scope
-open Lyceum.Inference.Gemma.Native -- Open to bring native functions into scope
+open Lyceum.Core.Environment
+
 
 namespace Lyceum.Memory
 
@@ -18,8 +15,14 @@ namespace Lyceum.Memory
 
 deriving instance Repr for Json
 
+/-- ベクトル表現 -/
+structure Vector where
+  data : Array Float
+deriving Repr, Inhabited, BEq, ToJson, FromJson
+
 /-- 
 ベクトルデータベースのエントリー。
+
 ベクトルデータに加えて、元のテキストやメタデータを保持する。
 -/
 structure VectorEntry where
