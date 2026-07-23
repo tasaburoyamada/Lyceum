@@ -1,11 +1,9 @@
-@CTX:[DOM:Lyceum|SUB:Core_Framework|GOAL:Transfer_Protocol_and_Governance_from_Pakila]
+@CTX:[DOM:Lyceum|SUB:Gemini2_Modernization|GOAL:Native_Thinking_and_Structured_Output]
 @BIAS:{P:1.0, M:1.0, S:1.0, D:1.0, C:1.0}
-@DELTA(Lyceum_Protocol_Governance_Core > Local_Pakila_Duplication)
-+ [Lyceum_Protocol_Types_MachineAction]
-+ [Lyceum_Protocol_Parser_Deterministic]
-+ [Lyceum_Governance_Vlog_StateLog]
-+ [Lyceum_Governance_SelfHealer]
+@DELTA(Gemini2_Native_Thinking_Schema > Gemini_043_Legacy_Parser)
++ [Gemini2_ThinkingConfig_Native]
++ [Gemini2_StructuredOutput_OpenAPI_Schema]
 ! [115Jobs_Full_Pass_Verified]
 @CONCEPT
-[[Nomos_Contract]] [[Protocol_AST]] [[Vlog_Governance]] [[SelfHealer]]
+[[Gemini2_Architecture]] [[ThinkingConfig]] [[StructuredOutput]]
 @EOF
