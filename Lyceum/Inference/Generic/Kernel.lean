@@ -81,60 +81,63 @@ def runLlamaLayer (model : RawGenericModel) (layerIdx : Nat) (input : Tensor [1,
       match updateCacheLayer cache layerIdx k_rope v with
       | Except.error e => return Except.error e
       | Except.ok updated_cache =>
-          if h_cache : layerIdx < updated_cache.keys.size ∧ layerIdx < updated_cache.values.size then
-            let k_full := updated_cache.keys[layerIdx]'h_cache.left
-            let scores := attentionScoresNative (FloatArray.mk q_rope) k_full hSize
-            
-            if h_score : scores.data.size = scores.size then
-              let probs := @LeanTensor.NN.softmax 1 scores.size { val := scores.data, prop := by simp [Shape.prod]; exact h_score }
-              let v_full := updated_cache.values[layerIdx]'h_cache.right
-              let context := weightedSumNative (FloatArray.mk probs.val) v_full hSize
+          if h_k : layerIdx < updated_cache.keys.size then
+            if h_v : layerIdx < updated_cache.values.size then
+              let k_full := updated_cache.keys[layerIdx]'h_k
+              let scores := attentionScoresNative (FloatArray.mk q_rope) k_full hSize
               
-              if h_ctx : context.data.size = hSize then
-                -- 4. O Projection
-                let o_w_raw_opt := model.tensors.get? s!"layers.{layerIdx}.attention.wo.weight"
-                let some o_w_raw_tensor := o_w_raw_opt | return Except.error (AppError.ModelError "Missing O weight")
-                let o_w_raw ← dequantize o_w_raw_tensor
-                if h_o : o_w_raw.data.size = hSize * hSize then
-                  let attn_out := @LeanTensor.matmul 1 hSize hSize (expand { val := context.data, prop := by simp [hSize, Shape.prod]; exact h_ctx }) { val := o_w_raw.data, prop := by simp [hSize, Shape.prod]; exact h_o }
-                  let x_res1 := LeanTensor.add input attn_out
-                  
-                  -- 5. FFN
-                  let ffn_norm_w_raw_opt := model.tensors.get? s!"layers.{layerIdx}.ffn_norm.weight"
-                  let some ffn_norm_w_raw_tensor := ffn_norm_w_raw_opt | return Except.error (AppError.ModelError "Missing FFN norm")
-                  let ffn_norm_w_raw ← dequantize ffn_norm_w_raw_tensor
-                  
-                  if h_ffn_norm : ffn_norm_w_raw.data.size = hSize then
-                    let x_ffn_normed := LeanTensor.rmsnorm (flatten x_res1) { val := ffn_norm_w_raw.data, prop := by simp [hSize, Shape.prod]; exact h_ffn_norm }
+              if h_score : scores.data.size = scores.size then
+                let probs := @LeanTensor.NN.softmax 1 scores.size { val := scores.data, prop := by simp [Shape.prod]; exact h_score }
+                let v_full := updated_cache.values[layerIdx]'h_v
+                let context := weightedSumNative (FloatArray.mk probs.val) v_full hSize
+                
+                if h_ctx : context.data.size = hSize then
+                  -- 4. O Projection
+                  let o_w_raw_opt := model.tensors.get? s!"layers.{layerIdx}.attention.wo.weight"
+                  let some o_w_raw_tensor := o_w_raw_opt | return Except.error (AppError.ModelError "Missing O weight")
+                  let o_w_raw ← dequantize o_w_raw_tensor
+                  if h_o : o_w_raw.data.size = hSize * hSize then
+                    let attn_out := @LeanTensor.matmul 1 hSize hSize (expand { val := context.data, prop := by simp [hSize, Shape.prod]; exact h_ctx }) { val := o_w_raw.data, prop := by simp [hSize, Shape.prod]; exact h_o }
+                    let x_res1 := LeanTensor.add input attn_out
                     
-                    let w1_raw_opt := model.tensors.get? s!"layers.{layerIdx}.feed_forward.w1.weight"
-                    let w3_raw_opt := model.tensors.get? s!"layers.{layerIdx}.feed_forward.w3.weight"
-                    let w2_raw_opt := model.tensors.get? s!"layers.{layerIdx}.feed_forward.w2.weight"
+                    -- 5. FFN
+                    let ffn_norm_w_raw_opt := model.tensors.get? s!"layers.{layerIdx}.ffn_norm.weight"
+                    let some ffn_norm_w_raw_tensor := ffn_norm_w_raw_opt | return Except.error (AppError.ModelError "Missing FFN norm")
+                    let ffn_norm_w_raw ← dequantize ffn_norm_w_raw_tensor
                     
-                    let some w1_w_raw_tensor := w1_raw_opt | return Except.error (AppError.ModelError "Missing W1")
-                    let some w3_w_raw_tensor := w3_raw_opt | return Except.error (AppError.ModelError "Missing W3")
-                    let some w2_w_raw_tensor := w2_raw_opt | return Except.error (AppError.ModelError "Missing W2")
-                    
-                    let w1_raw ← dequantize w1_w_raw_tensor
-                    let w3_raw ← dequantize w3_w_raw_tensor
-                    let w2_raw ← dequantize w2_w_raw_tensor
-                    
-                    if h_ffn_w : w1_raw.data.size = hSize * hSize ∧ w3_raw.data.size = hSize * hSize ∧ w2_raw.data.size = hSize * hSize then
-                       let x_ffn_2d := expand x_ffn_normed
-                       let gated := @LeanTensor.matmul 1 hSize hSize x_ffn_2d { val := w1_raw.data, prop := by simp [hSize, Shape.prod]; exact h_ffn_w.left }
-                       let up    := @LeanTensor.matmul 1 hSize hSize x_ffn_2d { val := w3_raw.data, prop := by simp [hSize, Shape.prod]; exact h_ffn_w.right.left }
-                       let activated_data := siluNative (FloatArray.mk gated.val) |>.data
-                       if h_act : activated_data.size = hSize then
-                         let activated := LeanTensor.mul { val := activated_data, prop := by simp [hSize, Shape.prod]; exact h_act } up
-                         let ffn_out := @LeanTensor.matmul 1 hSize hSize activated { val := w2_raw.data, prop := by simp [hSize, Shape.prod]; exact h_ffn_w.right.right }
-                         return Except.ok (LeanTensor.add x_res1 ffn_out, updated_cache)
-                       else return Except.error (AppError.ModelError "FFN activation mismatch")
-                    else return Except.error (AppError.ModelError "FFN weight size mismatch")
-                  else return Except.error (AppError.ModelError "FFN norm size mismatch")
-                else return Except.error (AppError.ModelError "O weight size mismatch")
-              else return Except.error (AppError.ModelError "Context size mismatch")
-            else return Except.error (AppError.ModelError "Softmax size mismatch")
-          else return Except.error (AppError.ModelError "Cache error")
+                    if h_ffn_norm : ffn_norm_w_raw.data.size = hSize then
+                      let x_ffn_normed := LeanTensor.rmsnorm (flatten x_res1) { val := ffn_norm_w_raw.data, prop := by simp [hSize, Shape.prod]; exact h_ffn_norm }
+                      
+                      let w1_raw_opt := model.tensors.get? s!"layers.{layerIdx}.feed_forward.w1.weight"
+                      let w3_raw_opt := model.tensors.get? s!"layers.{layerIdx}.feed_forward.w3.weight"
+                      let w2_raw_opt := model.tensors.get? s!"layers.{layerIdx}.feed_forward.w2.weight"
+                      
+                      let some w1_w_raw_tensor := w1_raw_opt | return Except.error (AppError.ModelError "Missing W1")
+                      let some w3_w_raw_tensor := w3_raw_opt | return Except.error (AppError.ModelError "Missing W3")
+                      let some w2_w_raw_tensor := w2_raw_opt | return Except.error (AppError.ModelError "Missing W2")
+                      
+                      let w1_raw ← dequantize w1_w_raw_tensor
+                      let w3_raw ← dequantize w3_w_raw_tensor
+                      let w2_raw ← dequantize w2_w_raw_tensor
+                      
+                      if h_ffn_w : w1_raw.data.size = hSize * hSize ∧ w3_raw.data.size = hSize * hSize ∧ w2_raw.data.size = hSize * hSize then
+                         let x_ffn_2d := expand x_ffn_normed
+                         let gated := @LeanTensor.matmul 1 hSize hSize x_ffn_2d { val := w1_raw.data, prop := by simp [hSize, Shape.prod]; exact h_ffn_w.left }
+                         let up    := @LeanTensor.matmul 1 hSize hSize x_ffn_2d { val := w3_raw.data, prop := by simp [hSize, Shape.prod]; exact h_ffn_w.right.left }
+                         let activated_data := siluNative (FloatArray.mk gated.val) |>.data
+                         if h_act : activated_data.size = hSize then
+                           let activated := LeanTensor.mul { val := activated_data, prop := by simp [hSize, Shape.prod]; exact h_act } up
+                           let ffn_out := @LeanTensor.matmul 1 hSize hSize activated { val := w2_raw.data, prop := by simp [hSize, Shape.prod]; exact h_ffn_w.right.right }
+                           return Except.ok (LeanTensor.add x_res1 ffn_out, updated_cache)
+                         else return Except.error (AppError.ModelError "FFN activation mismatch")
+                      else return Except.error (AppError.ModelError "FFN weight size mismatch")
+                    else return Except.error (AppError.ModelError "FFN norm size mismatch")
+                  else return Except.error (AppError.ModelError "O weight size mismatch")
+                else return Except.error (AppError.ModelError "Context size mismatch")
+              else return Except.error (AppError.ModelError "Softmax size mismatch")
+            else return Except.error (AppError.ModelError "Cache values index out of bounds")
+          else return Except.error (AppError.ModelError "Cache keys index out of bounds")
+
     else return Except.error (AppError.ModelError "QKV weight size mismatch")
   else return Except.error (AppError.ModelError "Norm weight size mismatch")
 

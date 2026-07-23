@@ -60,11 +60,14 @@ instance [Lyceum.Core.TerminalEnv IO] : LlmBackend LocalLlm where
 
   streamChatCompletion self history _options := do
     let prompt := historyToPrompt self.template history
-    let modelResult ← match self.rawModel with | some m => pure (Except.ok m) | none => Loader.loadRawGenericModel self.modelPath
+    let modelResult ← match self.rawModel with
+      | some m => pure (Except.ok m)
+      | none => Loader.loadRawGenericModel self.modelPath
     
     match modelResult with
     | Except.error e => return Except.error e
     | Except.ok model =>
+
       let tokenIds := Tokenizer.Unigram.unigramTokenize self.tokenizerInstance.vocab prompt
       if tokenIds.isEmpty then return Except.error (AppError.Unknown "Empty tokens")
       

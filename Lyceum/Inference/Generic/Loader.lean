@@ -86,6 +86,7 @@ def loadRawGenericModel (modelPath : String) [Lyceum.Core.TerminalEnv IO] : IO (
                 tensors := tensors.insert tInfo.name { name := tInfo.name, qType := qType, dims := tInfo.dimensions, data := tensorData }
             | Except.error _ => continue
 
-          return Except.ok { arch := arch, tensors := tensors }
+          return Except.ok ({ arch := arch, tensors := tensors } : RawGenericModel)
+
 
 end Lyceum.Inference.Generic.Loader

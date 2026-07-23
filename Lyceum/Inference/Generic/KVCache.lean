@@ -57,18 +57,21 @@ def verifyCache (self : GenericKVCache) : Except AppError Unit :=
 --/
 def updateCacheLayer (self : GenericKVCache) (idx : Nat) (k v : Array Float) 
   : Except AppError GenericKVCache := do
-  if h : idx < self.keys.size ∧ idx < self.values.size then
-    let newK := self.keys[idx].data ++ k
-    let newV := self.values[idx].data ++ v
-    let updated := { 
-      keys := self.keys.set idx (FloatArray.mk newK) h.left,
-      values := self.values.set idx (FloatArray.mk newV) h.right 
-    }
-    -- Nomos Contract Check: Verify invariant post-update
-    match verifyCache updated with
-    | Except.error e => Except.error e
-    | Except.ok () => Except.ok updated
+  if h_k : idx < self.keys.size then
+    if h_v : idx < self.values.size then
+      let newK := self.keys[idx].data ++ k
+      let newV := self.values[idx].data ++ v
+      let updated := { 
+        keys := self.keys.set idx (FloatArray.mk newK) h_k,
+        values := self.values.set idx (FloatArray.mk newV) h_v 
+      }
+      match verifyCache updated with
+      | Except.error e => Except.error e
+      | Except.ok () => Except.ok updated
+    else
+      Except.error (AppError.ModelError s!"Cache update values index {idx} out of bounds")
   else
-    Except.error (AppError.ModelError s!"Cache update index {idx} out of bounds")
+    Except.error (AppError.ModelError s!"Cache update keys index {idx} out of bounds")
+
 
 end Lyceum.Inference.Generic
