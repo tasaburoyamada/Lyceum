@@ -25,3 +25,8 @@ path = "../nomos"
 [[require]]
 name = "LeanTensor"
 path = "../LeanTensor"
+
+[[require]]
+name = "Lbir"
+path = "../lbir"
+

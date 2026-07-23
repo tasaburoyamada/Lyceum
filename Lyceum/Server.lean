@@ -1,7 +1,9 @@
+import Lbir
 import Lyceum.JsonRpc
 import Lyceum.Inference
-import Lyceum.Inference.Backend -- Import the backend implementation
+import Lyceum.Inference.Backend
 import Lyceum.Types
+
 import Lyceum.Types.ServerTypes
 import Nomos.Laws
 

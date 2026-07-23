@@ -1,5 +1,7 @@
 import Lean
+import Lbir
 import Lyceum.Types
+
 
 namespace Lyceum.JsonRpc
 

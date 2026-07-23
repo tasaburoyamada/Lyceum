@@ -1,6 +1,8 @@
+import Lbir
 import Lyceum.Server
 import Lyceum.Inference.Gemini
 import Lean.Data.Json.Parser
+
 
 open Lyceum
 open Lean
