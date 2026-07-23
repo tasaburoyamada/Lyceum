@@ -6,5 +6,9 @@ import Lyceum.Inference
 import Lyceum.Inference.Gemini
 import Lyceum.JsonRpc
 import Lyceum.Server
-import Lyceum.Test.ServerTest
+import Lyceum.Protocol.Types
+import Lyceum.Protocol.Parser
+import Lyceum.Governance.Vlog
+import Lyceum.Governance.SelfHealer
+
 

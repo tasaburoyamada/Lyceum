@@ -30,14 +30,15 @@ structure VectorEntry where
   text : String
   vector : Vector
   metadata : Json := Json.null
-deriving Repr, Inhabited, ToJson, FromJson
+deriving Repr, BEq, Inhabited, ToJson, FromJson
 
 /--
 インメモリーのベクトルデータベース。
 -/
 structure VectorDB where
   entries : Array VectorEntry := #[]
-deriving Repr, Inhabited, ToJson, FromJson
+deriving Repr, BEq, Inhabited, ToJson, FromJson
+
 
 instance : EmptyCollection VectorDB where
   emptyCollection := { entries := #[] }
