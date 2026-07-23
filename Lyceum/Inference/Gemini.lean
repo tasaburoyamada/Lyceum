@@ -10,17 +10,44 @@ open Lean
 /-- Gemini API 用のコンテンツパーツ -/
 inductive GeminiPart where
   | text (text : String)
+  | thought (text : String)
   | inlineData (mimeType : String) (data : String)
   | functionCall (name : String) (args : Json)
   | functionResponse (name : String) (response : Json)
-deriving ToJson, FromJson, Repr, Inhabited
+deriving Repr, Inhabited
 
 instance : ToJson GeminiPart where
   toJson p := match p with
     | .text t => Json.mkObj [("text", Json.str t)]
+    | .thought t => Json.mkObj [("thought", Json.str t)]
     | .inlineData m d => Json.mkObj [("inline_data", Json.mkObj [("mime_type", Json.str m), ("data", Json.str d)])]
     | .functionCall n a => Json.mkObj [("function_call", Json.mkObj [("name", Json.str n), ("args", a)])]
     | .functionResponse n r => Json.mkObj [("function_response", Json.mkObj [("name", Json.str n), ("response", r)])]
+
+instance : FromJson GeminiPart where
+  fromJson? j :=
+    if let .ok t := j.getObjValAs? String "text" then .ok (.text t)
+    else if let .ok t := j.getObjValAs? String "thought" then .ok (.thought t)
+    else if let .ok obj := j.getObjVal? "inline_data" then
+      if let (.ok m, .ok d) := (obj.getObjValAs? String "mime_type", obj.getObjValAs? String "data") then
+        .ok (.inlineData m d)
+      else .error "Invalid inline_data"
+    else if let .ok obj := j.getObjVal? "function_call" then
+      if let (.ok n, .ok a) := (obj.getObjValAs? String "name", obj.getObjVal? "args") then
+        .ok (.functionCall n a)
+      else .error "Invalid function_call"
+    else if let .ok obj := j.getObjVal? "function_response" then
+      if let (.ok n, .ok r) := (obj.getObjValAs? String "name", obj.getObjVal? "response") then
+        .ok (.functionResponse n r)
+      else .error "Invalid function_response"
+    else .error "Unknown GeminiPart format"
+
+
+/-- Gemini 2.0 Native Thinking Config -/
+structure ThinkingConfig where
+  thinkingBudget : Nat := 2048
+  includeThoughts : Bool := true
+deriving ToJson, FromJson, Repr, Inhabited
 
 structure GeminiContent where
   role : String
@@ -31,8 +58,10 @@ structure GeminiRequest where
   contents : List GeminiContent
   system_instruction : Option GeminiContent := none
   generationConfig : Option Json := none
+  thinkingConfig : Option ThinkingConfig := none
   tools : Option (List Json) := none
 deriving ToJson, FromJson, Inhabited
+
 
 structure GeminiClient where
   apiUrl : String
@@ -84,7 +113,9 @@ def messagesToGemini (history : List Message) : IO (Option GeminiContent × List
 def geminiPartToMessageDirect (p : GeminiPart) : MessagePart :=
   match p with
   | .text t => .text t
+  | .thought t => .text s!"<thought>\n{t}\n</thought>"
   | .inlineData mime b64 =>
+
       let bytes := fromBase64 b64
       match mime.splitOn "/" |>.head! with
       | "image" => MessagePart.image mime bytes

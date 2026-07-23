@@ -41,9 +41,29 @@ structure StructuredLlmResponse where
   hasLlmError : Bool := false
 deriving Repr, BEq, Inhabited, ToJson, FromJson
 
+/-- Gemini 2.0 Native Structured Output (OpenAPI 3.0 Schema) -/
+
+def structuredLlmResponseSchema : Json :=
+  Json.mkObj [
+    ("type", Json.str "OBJECT"),
+    ("properties", Json.mkObj [
+      ("thought", Json.mkObj [("type", Json.str "STRING"), ("description", Json.str "Thinking and reasoning process")]),
+      ("action", Json.mkObj [("type", Json.str "STRING"), ("description", Json.str "Action command e.g. /bash <cmd>, /write <file> <content>, /read <file>")]),
+      ("response", Json.mkObj [("type", Json.str "STRING"), ("description", Json.str "Natural language output to user")])
+    ]),
+    ("required", Json.arr #[Json.str "thought", Json.str "response"])
+  ]
 
 /-- LLMからの生応答を解析し、StructuredLlmResponse を抽出する -/
 def parseStructuredLlmResponse (rawResponse : String) : StructuredLlmResponse :=
-  { thought := "", action := none, response := rawResponse }
+  match Json.parse rawResponse with
+  | Except.ok j =>
+      let thought := (j.getObjValAs? String "thought").toOption.getD ""
+      let action := (j.getObjValAs? String "action").toOption
+      let response := (j.getObjValAs? String "response").toOption.getD rawResponse
+      { thought := thought, action := action, response := response }
+  | Except.error _ =>
+      { thought := "", action := none, response := rawResponse }
+
 
 end Lyceum.Protocol
